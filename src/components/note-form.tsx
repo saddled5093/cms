@@ -47,10 +47,10 @@ const iranProvinces = [
 const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
-  categories: z.string().optional(), // Comma-separated string
-  tags: z.string().optional(), // Comma-separated string
+  categories: z.string().optional(), 
+  tags: z.string().optional(), 
   province: z.string().min(1, "انتخاب استان الزامی است"),
-  phoneNumbers: z.string().optional(), // Comma-separated string for phone numbers
+  phoneNumbers: z.string().optional(), 
   isArchived: z.boolean().optional(),
   isPublished: z.boolean().optional(),
 });
@@ -66,7 +66,6 @@ export type NoteFormData = {
   isPublished: boolean;
 };
 
-// Internal form data type
 type FormSchemaType = z.infer<typeof noteFormSchema>;
 
 interface NoteFormProps {
@@ -141,7 +140,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
         form.reset(); 
       }
     }}>
-      <DialogContent className="sm:max-w-[525px] bg-card text-card-foreground rounded-lg shadow-xl">
+      <DialogContent className="sm:max-w-3xl bg-card text-card-foreground rounded-lg shadow-xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl">
             {initialData?.id ? "ویرایش یادداشت" : "ایجاد یادداشت جدید"}
@@ -149,139 +148,148 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6 p-1">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground">عنوان</FormLabel>
-                  <FormControl>
-                    <Input placeholder="عنوان یادداشت را وارد کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground">محتوا</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="یادداشت خود را اینجا بنویسید..."
-                      className="min-h-[120px] bg-input text-foreground placeholder:text-muted-foreground"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="province"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground">استان</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger className="bg-input text-foreground placeholder:text-muted-foreground">
-                        <SelectValue placeholder="یک استان انتخاب کنید" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {iranProvinces.map((provinceName) => (
-                        <SelectItem key={provinceName} value={provinceName}>
-                          {provinceName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="phoneNumbers"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground">شماره‌های تلفن (با کاما جدا کنید)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="مثال: ۰۹۱۲۳۴۵۶۷۸۹, ۰۲۱۸۷۶۵۴۳۲۱" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="categories"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground">دسته‌بندی‌ها (با کاما جدا کنید)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="مثال: کار، شخصی، پروژه آلفا" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="tags"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground">تگ‌ها (با کاما جدا کنید)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="مثال: مهم، فوری، ایده" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="isArchived"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-input">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-foreground">آرشیو کردن</FormLabel>
-                    <FormDescription className="text-muted-foreground text-xs">
-                      یادداشت را به آرشیو منتقل کن.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isPublished"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-input">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-foreground">انتشار عمومی</FormLabel>
-                    <FormDescription className="text-muted-foreground text-xs">
-                      این یادداشت برای نمایش عمومی منتشر شود.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <div className="md:flex md:gap-6">
+              <div className="md:flex-grow space-y-6">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">عنوان</FormLabel>
+                      <FormControl>
+                        <Input placeholder="عنوان یادداشت را وارد کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="content"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">محتوا</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="یادداشت خود را اینجا بنویسید..."
+                          className="min-h-[200px] md:min-h-[300px] bg-input text-foreground placeholder:text-muted-foreground"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="md:w-1/3 space-y-6 mt-6 md:mt-0">
+                <FormField
+                  control={form.control}
+                  name="province"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">استان</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger className="bg-input text-foreground placeholder:text-muted-foreground">
+                            <SelectValue placeholder="یک استان انتخاب کنید" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {iranProvinces.map((provinceName) => (
+                            <SelectItem key={provinceName} value={provinceName}>
+                              {provinceName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="phoneNumbers"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">شماره‌های تلفن</FormLabel>
+                      <FormControl>
+                        <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                      </FormControl>
+                       <FormDescription className="text-xs">مثال: ۰۹۱۲۳۴۵۶۷۸۹, ۰۲۱۸۷۶۵۴۳۲۱</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="categories"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">دسته‌بندی‌ها</FormLabel>
+                      <FormControl>
+                        <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                      </FormControl>
+                      <FormDescription className="text-xs">مثال: کار، شخصی</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="tags"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">تگ‌ها</FormLabel>
+                      <FormControl>
+                        <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                      </FormControl>
+                       <FormDescription className="text-xs">مثال: مهم، فوری</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isArchived"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-input">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-foreground">آرشیو کردن</FormLabel>
+                        <FormDescription className="text-muted-foreground text-xs">
+                          یادداشت به آرشیو منتقل شود.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isPublished"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-input">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-foreground">انتشار عمومی</FormLabel>
+                        <FormDescription className="text-muted-foreground text-xs">
+                          این یادداشت عمومی منتشر شود.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
             <DialogFooter className="sm:justify-end gap-2 pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); }}>

@@ -10,13 +10,16 @@ import SearchBar from "@/components/search-bar";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX, ArchiveIcon, EyeIcon } from "lucide-react";
+import { FilePlus, ServerCrash, FilterX } from "lucide-react";
 import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const generateId = () => crypto.randomUUID();
+
+type ArchiveFilterStatus = "all" | "archived" | "unarchived";
+type PublishFilterStatus = "all" | "published" | "unpublished";
 
 export default function HomePage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -28,6 +31,8 @@ export default function HomePage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterStatus>("all");
+  const [publishFilter, setPublishFilter] = useState<PublishFilterStatus>("all");
 
 
   const { toast } = useToast();
@@ -121,6 +126,8 @@ export default function HomePage() {
     setSelectedCategories([]);
     setSelectedTags([]);
     setSelectedProvinces([]);
+    setArchiveFilter("all");
+    setPublishFilter("all");
     setSearchTerm("");
   };
 
@@ -235,15 +242,28 @@ export default function HomePage() {
       tempNotes = tempNotes.filter(note => selectedProvinces.includes(note.province));
     }
 
-    // By default, filter out archived notes unless a filter is specifically applied that would include them
-    // For now, let's show all notes and user can filter later if they want.
-    // tempNotes = tempNotes.filter(note => !note.isArchived);
+    if (archiveFilter === "archived") {
+      tempNotes = tempNotes.filter(note => note.isArchived);
+    } else if (archiveFilter === "unarchived") {
+      tempNotes = tempNotes.filter(note => !note.isArchived);
+    }
 
+    if (publishFilter === "published") {
+      tempNotes = tempNotes.filter(note => note.isPublished);
+    } else if (publishFilter === "unpublished") {
+      tempNotes = tempNotes.filter(note => !note.isPublished);
+    }
 
     return tempNotes.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  }, [notes, debouncedSearchTerm, selectedCategories, selectedTags, selectedProvinces]);
+  }, [notes, debouncedSearchTerm, selectedCategories, selectedTags, selectedProvinces, archiveFilter, publishFilter]);
   
-  const activeFilterCount = selectedCategories.length + selectedTags.length + selectedProvinces.length + (searchTerm ? 1 : 0);
+  const activeFilterCount = 
+    selectedCategories.length + 
+    selectedTags.length + 
+    selectedProvinces.length + 
+    (archiveFilter !== "all" ? 1 : 0) +
+    (publishFilter !== "all" ? 1 : 0) +
+    (searchTerm ? 1 : 0);
 
 
   return (
@@ -266,7 +286,7 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-x-8 gap-y-6 mt-8">
-          <aside className="lg:w-64 xl:w-72 lg:sticky lg:top-24 h-fit lg:max-h-[calc(100vh-8rem)]">
+          <aside className="lg:w-72 xl:w-80 lg:sticky lg:top-24 h-fit lg:max-h-[calc(100vh-8rem)]">
             <Card className="shadow-lg rounded-lg">
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg font-headline text-primary flex items-center justify-between">
@@ -280,7 +300,7 @@ export default function HomePage() {
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">دسته‌بندی‌ها</h3>
                   {allCategories.length > 0 ? (
-                    <ScrollArea className="h-32 pr-3">
+                    <ScrollArea className="h-28 pr-3">
                       <div className="flex flex-wrap gap-2">
                         {allCategories.map(category => (
                           <Badge
@@ -305,7 +325,7 @@ export default function HomePage() {
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">تگ‌ها</h3>
                   {allTags.length > 0 ? (
-                    <ScrollArea className="h-32 pr-3">
+                    <ScrollArea className="h-28 pr-3">
                       <div className="flex flex-wrap gap-2">
                         {allTags.map(tag => (
                           <Badge
@@ -330,7 +350,7 @@ export default function HomePage() {
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">استان‌ها</h3>
                   {allProvinces.length > 0 ? (
-                    <ScrollArea className="h-32 pr-3">
+                    <ScrollArea className="h-28 pr-3">
                       <div className="flex flex-wrap gap-2">
                         {allProvinces.map(province => (
                           <Badge
@@ -351,9 +371,47 @@ export default function HomePage() {
                     <p className="text-sm text-muted-foreground">استانی برای فیلتر وجود ندارد.</p>
                   )}
                 </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2.5 text-md text-foreground">وضعیت آرشیو</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(["all", "archived", "unarchived"] as ArchiveFilterStatus[]).map(status => (
+                      <Badge
+                        key={status}
+                        variant={archiveFilter === status ? "default" : "secondary"}
+                        onClick={() => setArchiveFilter(status)}
+                        className="cursor-pointer py-1.5 px-3 text-xs transition-all hover:opacity-80"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && setArchiveFilter(status)}
+                      >
+                        {status === "all" ? "همه" : status === "archived" ? "آرشیو شده" : "آرشیو نشده"}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold mb-2.5 text-md text-foreground">وضعیت انتشار</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(["all", "published", "unpublished"] as PublishFilterStatus[]).map(status => (
+                      <Badge
+                        key={status}
+                        variant={publishFilter === status ? "default" : "secondary"}
+                        onClick={() => setPublishFilter(status)}
+                        className="cursor-pointer py-1.5 px-3 text-xs transition-all hover:opacity-80"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && setPublishFilter(status)}
+                      >
+                        {status === "all" ? "همه" : status === "published" ? "منتشر شده" : "منتشر نشده"}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
                 
                 {activeFilterCount > 0 && (
-                   <Button onClick={clearFilters} variant="outline" size="sm" className="w-full mt-3 text-muted-foreground hover:text-foreground">
+                   <Button onClick={clearFilters} variant="outline" size="sm" className="w-full mt-4 text-muted-foreground hover:text-foreground">
                       <FilterX className="ml-2 h-4 w-4" />
                       پاک کردن همه فیلترها
                    </Button>
@@ -364,7 +422,7 @@ export default function HomePage() {
 
           <main className="flex-grow min-w-0">
             {filteredNotes.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="space-y-4">
                 {filteredNotes.map((note) => (
                   <NoteCard
                     key={note.id}
