@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { User } from '@prisma/client'; // Assuming User type from Prisma
-import { UserRole } from '@prisma/client'; // Import UserRole
+import { type UserRole } from '@prisma/client'; // Import UserRole type
 
 interface AuthContextType {
   currentUser: User | null;
@@ -83,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const defaultAdminUser: User = {
       id: 'default-admin-id', // Placeholder ID
       username: 'admin',
-      role: UserRole.ADMIN,
+      role: "ADMIN" as UserRole, // Use string literal, cast to UserRole type
       password: '', // Password hash is not stored/used on client
       createdAt: new Date(),
       updatedAt: new Date(),
