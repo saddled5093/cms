@@ -262,6 +262,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                             onSelect={field.onChange}
                             initialFocus
                             locale={faIR}
+                            required
                           />
                         </PopoverContent>
                       </Popover>
@@ -427,3 +428,4 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     </Dialog>
   );
 }
+

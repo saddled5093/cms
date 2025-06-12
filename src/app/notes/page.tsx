@@ -18,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar"; // Shadcn Calendar
-import { format as formatDateFn, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { format as formatDateFn, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
@@ -58,18 +58,34 @@ export default function NotesPage() {
     try {
       const storedNotes = localStorage.getItem("not_notes");
       if (storedNotes) {
-        setNotes(JSON.parse(storedNotes).map((note: any) => ({
-          ...note,
-          categories: Array.isArray(note.categories) ? note.categories : (typeof note.categories === 'string' ? note.categories.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-          tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? note.tags.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-          province: note.province || "", 
-          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-          isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
-          isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
-          eventDate: note.eventDate ? parseISO(note.eventDate) : parseISO(note.createdAt), // Use createdAt if eventDate is missing
-          createdAt: parseISO(note.createdAt),
-          updatedAt: parseISO(note.updatedAt),
-        })));
+        setNotes(JSON.parse(storedNotes).map((note: any) => {
+          let parsedEventDate = note.eventDate ? parseISO(note.eventDate) : null;
+          if (!parsedEventDate || !isValid(parsedEventDate)) {
+            parsedEventDate = note.createdAt ? parseISO(note.createdAt) : new Date();
+            if (!isValid(parsedEventDate)) {
+                parsedEventDate = new Date(); // Ultimate fallback
+            }
+          }
+
+          let parsedCreatedAt = note.createdAt ? parseISO(note.createdAt) : new Date();
+          if (!isValid(parsedCreatedAt)) parsedCreatedAt = new Date();
+          
+          let parsedUpdatedAt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
+          if (!isValid(parsedUpdatedAt)) parsedUpdatedAt = new Date();
+
+          return {
+            ...note,
+            categories: Array.isArray(note.categories) ? note.categories : (typeof note.categories === 'string' ? note.categories.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
+            tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? note.tags.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
+            province: note.province || "", 
+            phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
+            isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
+            isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
+            eventDate: parsedEventDate,
+            createdAt: parsedCreatedAt,
+            updatedAt: parsedUpdatedAt,
+          };
+        }));
       }
     } catch (error) {
       console.error("Failed to load notes from localStorage", error);
@@ -608,3 +624,4 @@ export default function NotesPage() {
     </>
   );
 }
+
