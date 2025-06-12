@@ -38,6 +38,8 @@ export default function HomePage() {
           ...note,
           categories: note.categories || [],
           tags: note.tags || [],
+          province: note.province || "", // Handle potentially missing province
+          phoneNumbers: note.phoneNumbers || [], // Handle potentially missing phoneNumbers
           createdAt: new Date(note.createdAt),
           updatedAt: new Date(note.updatedAt),
         })));
@@ -106,7 +108,11 @@ export default function HomePage() {
       setNotes(
         notes.map((note) =>
           note.id === editingNote.id
-            ? { ...note, ...data, updatedAt: new Date() }
+            ? { 
+                ...note, 
+                ...data, // includes title, content, categories, tags, province, phoneNumbers
+                updatedAt: new Date() 
+              }
             : note
         )
       );
@@ -118,6 +124,8 @@ export default function HomePage() {
         content: data.content,
         categories: data.categories,
         tags: data.tags,
+        province: data.province,
+        phoneNumbers: data.phoneNumbers,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -155,19 +163,21 @@ export default function HomePage() {
           note.title.toLowerCase().includes(lowerSearchTerm) ||
           note.content.toLowerCase().includes(lowerSearchTerm) ||
           note.categories.some(cat => cat.toLowerCase().includes(lowerSearchTerm)) ||
-          note.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm))
+          note.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm)) ||
+          note.province.toLowerCase().includes(lowerSearchTerm) ||
+          note.phoneNumbers.some(pn => pn.toLowerCase().includes(lowerSearchTerm))
       );
     }
 
     if (selectedCategories.length > 0) {
       tempNotes = tempNotes.filter(note =>
-        note.categories.some(cat => selectedCategories.includes(cat))
+        selectedCategories.every(sc => note.categories.includes(sc))
       );
     }
 
     if (selectedTags.length > 0) {
       tempNotes = tempNotes.filter(note =>
-        note.tags.some(tag => selectedTags.includes(tag))
+        selectedTags.every(st => note.tags.includes(st))
       );
     }
     // Sort notes by updatedAt in descending order (newest first)
@@ -197,7 +207,7 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-x-8 gap-y-6 mt-8">
-          {/* Filter Panel - Appears on the right in RTL due to flex-row */}
+          {/* Filter Panel */}
           <aside className="lg:w-64 xl:w-72 lg:sticky lg:top-24 h-fit lg:max-h-[calc(100vh-8rem)]">
             <Card className="shadow-lg rounded-lg">
               <CardHeader className="pb-4">
@@ -270,7 +280,7 @@ export default function HomePage() {
           </aside>
 
           {/* Notes Grid */}
-          <main className="flex-grow min-w-0"> {/* Added min-w-0 to prevent overflow issues with grid */}
+          <main className="flex-grow min-w-0">
             {filteredNotes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredNotes.map((note) => (
@@ -321,5 +331,3 @@ export default function HomePage() {
     </>
   );
 }
-
-    

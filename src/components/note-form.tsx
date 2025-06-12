@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,14 +23,32 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Note } from "@/types";
 import { useEffect } from "react";
+
+const iranProvinces = [
+  "البرز", "اردبیل", "آذربایجان شرقی", "آذربایجان غربی", "بوشهر", "چهارمحال و بختیاری",
+  "فارس", "گیلان", "گلستان", "همدان", "هرمزگان", "ایلام", "اصفهان", "کرمان",
+  "کرمانشاه", "خراسان شمالی", "خراسان رضوی", "خراسان جنوبی", "خوزستان",
+  "کهگیلویه و بویراحمد", "کردستان", "لرستان", "مرکزی", "مازندران", "قزوین",
+  "قم", "سمنان", "سیستان و بلوچستان", "تهران", "یزد", "زنجان"
+].sort((a, b) => a.localeCompare(b, 'fa'));
+
 
 const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
   categories: z.string().optional(), // Comma-separated string
   tags: z.string().optional(), // Comma-separated string
+  province: z.string().min(1, "انتخاب استان الزامی است"),
+  phoneNumbers: z.string().optional(), // Comma-separated string for phone numbers
 });
 
 export type NoteFormData = {
@@ -37,6 +56,8 @@ export type NoteFormData = {
   content: string;
   categories: string[];
   tags: string[];
+  province: string;
+  phoneNumbers: string[];
 };
 
 // Internal form data type
@@ -57,6 +78,8 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       content: "",
       categories: "",
       tags: "",
+      province: "",
+      phoneNumbers: "",
     },
   });
 
@@ -68,9 +91,11 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
           content: initialData.content || "",
           categories: initialData.categories?.join(", ") || "",
           tags: initialData.tags?.join(", ") || "",
+          province: initialData.province || "",
+          phoneNumbers: initialData.phoneNumbers?.join(", ") || "",
         });
       } else {
-        form.reset({ title: "", content: "", categories: "", tags: "" });
+        form.reset({ title: "", content: "", categories: "", tags: "", province: "", phoneNumbers: "" });
       }
     }
   }, [initialData, form, isOpen]);
@@ -82,12 +107,17 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     const tagsArray = data.tags
       ? data.tags.split(",").map((tag) => tag.trim()).filter(tag => tag)
       : [];
+    const phoneNumbersArray = data.phoneNumbers
+      ? data.phoneNumbers.split(",").map((pn) => pn.trim()).filter(pn => pn)
+      : [];
     
     onSubmit({
       title: data.title,
       content: data.content,
       categories: categoriesArray,
       tags: tagsArray,
+      province: data.province,
+      phoneNumbers: phoneNumbersArray,
     });
     form.reset();
   };
@@ -96,7 +126,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
         onClose();
-        form.reset(); // Ensure form is reset when dialog is closed via X or overlay click
+        form.reset(); 
       }
     }}>
       <DialogContent className="sm:max-w-[525px] bg-card text-card-foreground rounded-lg shadow-xl">
@@ -129,9 +159,46 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                   <FormControl>
                     <Textarea
                       placeholder="یادداشت خود را اینجا بنویسید..."
-                      className="min-h-[150px] bg-input text-foreground placeholder:text-muted-foreground"
+                      className="min-h-[120px] bg-input text-foreground placeholder:text-muted-foreground" // Reduced height a bit
                       {...field}
                     />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="province"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-foreground">استان</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="bg-input text-foreground placeholder:text-muted-foreground">
+                        <SelectValue placeholder="یک استان انتخاب کنید" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {iranProvinces.map((provinceName) => (
+                        <SelectItem key={provinceName} value={provinceName}>
+                          {provinceName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phoneNumbers"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-foreground">شماره‌های تلفن (با کاما جدا کنید)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="مثال: ۰۹۱۲۳۴۵۶۷۸۹, ۰۲۱۸۷۶۵۴۳۲۱" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

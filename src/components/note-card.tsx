@@ -1,10 +1,11 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Note } from "@/types";
-import { Edit3, Trash2, Folder, Tag } from "lucide-react";
+import { Edit3, Trash2, Folder, Tag, MapPin, Phone } from "lucide-react";
 import { format } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 
@@ -15,7 +16,7 @@ interface NoteCardProps {
 }
 
 export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
-  const MAX_CONTENT_PREVIEW_LENGTH = 100; // Adjusted for new elements
+  const MAX_CONTENT_PREVIEW_LENGTH = 80; // Adjusted for new elements
   const displayContent = note.content.length > MAX_CONTENT_PREVIEW_LENGTH 
     ? `${note.content.substring(0, MAX_CONTENT_PREVIEW_LENGTH)}...`
     : note.content;
@@ -28,10 +29,22 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
           آخرین بروزرسانی: {format(new Date(note.updatedAt), "PPpp", { locale: faIR })}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow pb-4 space-y-3">
+      <CardContent className="flex-grow pb-4 space-y-2.5"> {/* Adjusted spacing */}
         <p className="text-sm font-body whitespace-pre-wrap break-words">
           {displayContent}
         </p>
+        {note.province && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" />
+            <span>{note.province}</span>
+          </div>
+        )}
+        {note.phoneNumbers && note.phoneNumbers.length > 0 && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Phone className="h-3.5 w-3.5" />
+            <span>{note.phoneNumbers.join('، ')}</span>
+          </div>
+        )}
         { (note.categories && note.categories.length > 0) && (
           <div className="flex flex-wrap gap-1 items-center">
             <Folder className="h-4 w-4 text-muted-foreground mr-1" />
