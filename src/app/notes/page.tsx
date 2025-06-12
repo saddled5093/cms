@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { Note, Category, Comment as CommentType } from "@/types";
-import type { NoteFormData } from "@/components/note-form";
+import type { Note, Category } from "@/types";
+import type { NoteFormData } from "@/components/note-form"; // Keep for new note creation
 import NoteCard from "@/components/note-card";
 import NoteForm from "@/components/note-form";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -22,7 +22,6 @@ import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
 import { useAuth } from "@/contexts/AuthContext";
-import { UserRole } from '@prisma/client';
 
 
 type ArchiveFilterStatus = "all" | "archived" | "unarchived";
@@ -34,15 +33,15 @@ export default function NotesPage() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
 
   const [titleSearch, setTitleSearch] = useState("");
-  const [contentSearch, setContentSearch] = useState("");
-  const [phoneSearch, setPhoneSearch] = useState("");
+  const [contentSearch, setContentSearch] = useState(""); // Keep for potential future detailed list search
+  const [phoneSearch, setPhoneSearch] = useState(""); // Keep for potential future detailed list search
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const [debouncedTitleSearch, setDebouncedTitleSearch] = useState("");
   const [debouncedContentSearch, setDebouncedContentSearch] = useState("");
   const [debouncedPhoneSearch, setDebouncedPhoneSearch] = useState("");
 
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  // Editing is now handled on the [noteId] page, but creating new notes still uses the form here.
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
@@ -72,8 +71,8 @@ export default function NotesPage() {
       categories: Array.isArray(note.categories)
         ? note.categories.map((c: any) => (typeof c === 'string' ? { id: c, name: c } : (c && c.name ? c : { id: String(c), name: String(c) })))
         : [],
-      tags: Array.isArray(note.tags) ? note.tags : (note.tags && typeof note.tags === 'string' ? JSON.parse(note.tags) : []),
-      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (note.phoneNumbers && typeof note.phoneNumbers === 'string' ? JSON.parse(note.phoneNumbers) : []),
+      tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' && note.tags.startsWith('[') ? JSON.parse(note.tags) : []),
+      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' && note.phoneNumbers.startsWith('[') ? JSON.parse(note.phoneNumbers) : []),
       province: note.province || "",
       rating: note.rating ?? 0,
       comments: (note.comments || []).map((comment: any) => ({
@@ -154,9 +153,6 @@ export default function NotesPage() {
   }, [notes]);
 
   const displayableCategoriesForFilter = useMemo(() => {
-    // For filtering, use categories present in notes if API-fetched categories are empty
-    // or if we want to show only relevant categories.
-    // However, for the NoteForm, we should always use `availableCategories` (fetched from API).
     return allUniqueCategoriesFromNotes.length > 0 ? allUniqueCategoriesFromNotes : availableCategories;
   }, [availableCategories, allUniqueCategoriesFromNotes]);
 
@@ -210,7 +206,7 @@ export default function NotesPage() {
     setDateRange(undefined);
   };
 
-  const handleSaveNote = async (data: NoteFormData) => {
+  const handleSaveNewNote = async (data: NoteFormData) => { // Renamed from handleSaveNote
     if (!currentUser) {
       toast({ title: "خطا", description: "برای ذخیره یادداشت باید وارد شوید.", variant: "destructive" });
       return;
@@ -222,58 +218,27 @@ export default function NotesPage() {
     };
 
     try {
-      let response;
-      let savedNoteDataRaw;
-
-      if (editingNote) {
-        // TODO: Implement PUT /api/notes/:id for full update
-        // For now, using optimistic update + refetch as PUT /api/notes/:id might not exist or be fully implemented
-        response = await fetch(`/api/notes/${editingNote.id}`, { // Assuming PUT /api/notes/:id exists
-            method: 'PUT', // Needs to be implemented in /api/notes/[noteId]/route.ts
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || errorData.details || 'Failed to update note');
-        }
-        savedNoteDataRaw = await response.json();
-
-      } else {
-        response = await fetch('/api/notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || errorData.details || 'Failed to save note');
-        }
-        savedNoteDataRaw = await response.json();
+      const response = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to save new note');
       }
-
+      const savedNoteDataRaw = await response.json();
       const finalNote = processFetchedNote(savedNoteDataRaw);
 
-      if (editingNote) {
-        setNotes(notes.map(n => n.id === editingNote.id ? finalNote : n));
-        toast({ title: "یادداشت به‌روزرسانی شد" });
-      } else {
-        setNotes(prevNotes => [finalNote, ...prevNotes]);
-        toast({ title: "یادداشت ایجاد شد" });
-      }
-      fetchAvailableCategories(); // Re-fetch categories in case a new note used a new one (though less likely with form dropdown)
+      setNotes(prevNotes => [finalNote, ...prevNotes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+      toast({ title: "یادداشت جدید ایجاد شد" });
+      fetchAvailableCategories(); 
     } catch (error: any) {
-      console.error("Failed to save note:", error);
-      toast({ title: "خطا در ذخیره یادداشت", description: error.message, variant: "destructive" });
+      console.error("Failed to save new note:", error);
+      toast({ title: "خطا در ذخیره یادداشت جدید", description: error.message, variant: "destructive" });
     }
 
     setIsFormOpen(false);
-    setEditingNote(null);
-  };
-
-  const handleEditNote = (note: Note) => {
-    setEditingNote(note);
-    setIsFormOpen(true);
   };
 
   const handleDeleteNoteRequest = (noteId: string) => {
@@ -286,15 +251,16 @@ export default function NotesPage() {
       setDeleteConfirmationStep(2);
     } else if (deleteConfirmationStep === 2 && noteToDeleteId) {
       try {
-        // TODO: Implement DELETE /api/notes/:id
-        // const response = await fetch(`/api/notes/${noteToDeleteId}`, { method: 'DELETE' });
-        // if (!response.ok) throw new Error("Failed to delete note from server");
-        
+        const response = await fetch(`/api/notes/${noteToDeleteId}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.details || errorData.error || "Failed to delete note from server");
+        }
         setNotes(notes.filter((note) => note.id !== noteToDeleteId));
-        toast({ title: "یادداشت (به صورت موقت) حذف شد" }); // Update message based on actual deletion type
-      } catch (error) {
+        toast({ title: "یادداشت حذف شد" });
+      } catch (error: any) {
         console.error("Failed to delete note:", error);
-        toast({ title: "خطا در حذف یادداشت", variant: "destructive" });
+        toast({ title: "خطا در حذف یادداشت", description: error.message, variant: "destructive" });
       }
       setNoteToDeleteId(null);
       setDeleteConfirmationStep(1);
@@ -312,31 +278,22 @@ export default function NotesPage() {
 
     const newArchivedState = !noteToUpdate.isArchived;
     try {
-        // TODO: Implement PUT /api/notes/:id/archive or similar for individual field update
-        // For now, optimistic update. A full PUT /api/notes/:id would also work if it handles partial updates.
-        
-        // Example: Simulating an API call or using a general update endpoint
-        // const response = await fetch(`/api/notes/${noteId}`, {
-        //     method: 'PUT', // or PATCH
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ isArchived: newArchivedState }), // Send only the changed field
-        // });
-        // if (!response.ok) throw new Error("Failed to update archive status on server");
-        // const updatedNoteRaw = await response.json();
-        // const updatedNote = processFetchedNote(updatedNoteRaw);
-        // setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
-        
-        setNotes(prevNotes =>
-          prevNotes.map(note =>
-            note.id === noteId ? { ...note, isArchived: newArchivedState, updatedAt: new Date() } : note
-          )
-        );
+        const response = await fetch(`/api/notes/${noteId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...noteToUpdate, isArchived: newArchivedState, categoryIds: noteToUpdate.categories.map(c => c.id) }), // Send full note data for update
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.details || errorData.error || "Failed to update archive status on server");
+        }
+        const updatedNoteRaw = await response.json();
+        const updatedNote = processFetchedNote(updatedNoteRaw);
+        setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
         toast({ title: `یادداشت ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to toggle archive status:", error);
-        toast({ title: "خطا در تغییر وضعیت آرشیو", variant: "destructive" });
-        // Revert optimistic update if API call fails
-        setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? { ...note, isArchived: !newArchivedState } : note));
+        toast({ title: "خطا در تغییر وضعیت آرشیو", description: error.message, variant: "destructive" });
     }
   };
 
@@ -346,82 +303,26 @@ export default function NotesPage() {
 
     const newPublishedState = !noteToUpdate.isPublished;
     try {
-        // TODO: Implement PUT /api/notes/:id/publish or similar for individual field update
-        setNotes(prevNotes =>
-          prevNotes.map(note =>
-            note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
-          )
-        );
-        toast({ title: `وضعیت انتشار یادداشت ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
-    } catch (error) {
-        console.error("Failed to toggle publish status:", error);
-        toast({ title: "خطا در تغییر وضعیت انتشار", variant: "destructive" });
-        setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? { ...note, isPublished: !newPublishedState } : note));
-    }
-  };
-
-  const handleRatingChange = async (noteId: string, rating: number) => {
-    if (!currentUser || currentUser.role !== "ADMIN") { // String comparison
-        toast({ title: "خطا", description: "فقط مدیران می‌توانند امتیاز دهند.", variant: "destructive"});
-        return;
-    }
-    try {
-        const response = await fetch(`/api/notes/${noteId}/rating`, {
+         const response = await fetch(`/api/notes/${noteId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rating }),
+            body: JSON.stringify({ ...noteToUpdate, isPublished: newPublishedState, categoryIds: noteToUpdate.categories.map(c => c.id) }),
         });
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to update rating on server');
+            throw new Error(errorData.details || errorData.error || "Failed to update publish status on server");
         }
         const updatedNoteRaw = await response.json();
         const updatedNote = processFetchedNote(updatedNoteRaw);
         setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
-        // toast({ title: "موفقیت", description: `امتیاز یادداشت به ${rating} تغییر کرد.` }); // Toast moved to NoteCard
+        toast({ title: `وضعیت انتشار یادداشت ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
     } catch (error: any) {
-        console.error("Failed to update rating:", error);
-        toast({ title: "خطا در ثبت امتیاز", description: error.message, variant: "destructive" });
+        console.error("Failed to toggle publish status:", error);
+        toast({ title: "خطا در تغییر وضعیت انتشار", description: error.message, variant: "destructive" });
     }
   };
 
-  const handleAddComment = async (noteId: string, content: string) => {
-    if (!currentUser) {
-        toast({ title: "خطا", description: "برای ثبت نظر باید وارد شوید.", variant: "destructive"});
-        return;
-    }
-    try {
-        const response = await fetch(`/api/notes/${noteId}/comments`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, authorId: currentUser.id }),
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to add comment on server');
-        }
-        const newCommentRaw = await response.json();
-        const newComment: CommentType = {
-            ...newCommentRaw,
-            createdAt: parseISO(newCommentRaw.createdAt),
-            updatedAt: parseISO(newCommentRaw.updatedAt),
-        };
-        
-        setNotes(prevNotes => prevNotes.map(n => {
-            if (n.id === noteId) {
-                return {
-                    ...n,
-                    comments: [...(n.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                };
-            }
-            return n;
-        }));
-    } catch (error: any) {
-        console.error("Failed to add comment:", error);
-        toast({ title: "خطا در ثبت نظر", description: error.message, variant: "destructive" });
-    }
-  };
-
+  // Rating and comment logic is moved to the [noteId] page
 
   const filteredNotes = useMemo(() => {
     let tempNotes = notes;
@@ -429,10 +330,10 @@ export default function NotesPage() {
     if (debouncedTitleSearch) {
       tempNotes = tempNotes.filter(note => note.title.toLowerCase().includes(debouncedTitleSearch.toLowerCase()));
     }
-    if (debouncedContentSearch) {
+    if (debouncedContentSearch) { // Kept for future, but list view is simplified
       tempNotes = tempNotes.filter(note => note.content.toLowerCase().includes(debouncedContentSearch.toLowerCase()));
     }
-    if (debouncedPhoneSearch) {
+    if (debouncedPhoneSearch) { // Kept for future
       tempNotes = tempNotes.filter(note => note.phoneNumbers.some(pn => pn.includes(debouncedPhoneSearch)));
     }
 
@@ -474,14 +375,8 @@ export default function NotesPage() {
       tempNotes = tempNotes.filter(note => !note.isPublished);
     }
 
-    return tempNotes.sort((a, b) => {
-      const dateA = new Date(a.eventDate);
-      const dateB = new Date(b.eventDate);
-      if (!isValidDateFn(dateA) && !isValidDateFn(dateB)) return 0;
-      if (!isValidDateFn(dateA)) return 1;
-      if (!isValidDateFn(dateB)) return -1;
-      return dateB.getTime() - dateA.getTime();
-    });
+    // Sort by updatedAt by default now as primary sort for list
+    return tempNotes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [
     notes,
     debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch,
@@ -539,14 +434,14 @@ export default function NotesPage() {
             />
             <Input
               type="text"
-              placeholder="جستجو بر اساس محتوا..."
+              placeholder="جستجو محتوا (فیلتر دقیق‌تر)..."
               value={contentSearch}
               onChange={(e) => setContentSearch(e.target.value)}
               className="bg-input placeholder:text-muted-foreground"
             />
             <Input
               type="text"
-              placeholder="جستجو بر اساس شماره تلفن..."
+              placeholder="جستجو شماره تلفن (فیلتر دقیق‌تر)..."
               value={phoneSearch}
               onChange={(e) => setPhoneSearch(e.target.value)}
               className="bg-input placeholder:text-muted-foreground"
@@ -571,7 +466,7 @@ export default function NotesPage() {
                         formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })
                       )
                     ) : (
-                      <span>انتخاب بازه زمانی</span>
+                      <span>انتخاب بازه زمانی رویداد</span>
                     )}
                   </Button>
                 </PopoverTrigger>
@@ -609,8 +504,7 @@ export default function NotesPage() {
           </div>
           <Button
             onClick={() => {
-              setEditingNote(null);
-              setIsFormOpen(true);
+              setIsFormOpen(true); // This opens the form for a *new* note
             }}
             className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-md transition-transform hover:scale-105"
             aria-label="ایجاد یادداشت جدید"
@@ -762,12 +656,9 @@ export default function NotesPage() {
                   <NoteCard
                     key={note.id}
                     note={note}
-                    onEdit={handleEditNote}
                     onDelete={handleDeleteNoteRequest}
                     onToggleArchive={handleToggleArchive}
                     onTogglePublish={handleTogglePublish}
-                    onRatingChange={handleRatingChange}
-                    onCommentAdd={handleAddComment}
                   />
                 ))}
               </div>
@@ -789,14 +680,14 @@ export default function NotesPage() {
           </main>
         </div>
 
+        {/* NoteForm is still used for creating NEW notes from this page */}
         <NoteForm
           isOpen={isFormOpen}
           onClose={() => {
             setIsFormOpen(false);
-            setEditingNote(null);
           }}
-          onSubmit={handleSaveNote}
-          initialData={editingNote || undefined}
+          onSubmit={handleSaveNewNote}
+          // initialData is undefined for new notes
           availableCategories={availableCategories}
         />
 
@@ -807,8 +698,8 @@ export default function NotesPage() {
           title={deleteConfirmationStep === 1 ? "حذف یادداشت" : "تأیید نهایی حذف"}
           description={
             deleteConfirmationStep === 1
-              ? "آیا از حذف این یادداشت مطمئن هستید؟"
-              : "این عمل غیرقابل بازگشت است و یادداشت برای همیشه حذف خواهد شد. آیا کاملاً مطمئن هستید؟"
+              ? "آیا از حذف این یادداشت مطمئن هستید؟ این عمل، نظرات مرتبط را نیز حذف خواهد کرد."
+              : "این عمل غیرقابل بازگشت است و یادداشت و تمام نظرات آن برای همیشه حذف خواهند شد. آیا کاملاً مطمئن هستید؟"
           }
         />
       </div>
