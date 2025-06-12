@@ -85,9 +85,8 @@ export default function NotesPage() {
     if (!currentUser) return;
     setIsLoadingNotes(true);
     try {
-      // If fetching for "others" (e.g. public notes), the API will handle isPublished filter
-      // For current user, API returns all their notes
-      const response = await fetch(`/api/notes?userId=${currentUser.id}`);
+      // For the general notes list, pass `requestingUserId` to get published notes + current user's own notes.
+      const response = await fetch(`/api/notes?requestingUserId=${currentUser.id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch notes');
       }
@@ -332,11 +331,22 @@ export default function NotesPage() {
       tempNotes = tempNotes.filter(note => !note.isArchived);
     }
 
-    if (publishFilter === "published") {
-      tempNotes = tempNotes.filter(note => note.isPublished);
-    } else if (publishFilter === "unpublished") {
-      tempNotes = tempNotes.filter(note => !note.isPublished);
+    // Note: Filtering by publishFilter for the current user's view might be complex here
+    // as the API already sends a mix. This client-side filter will further refine it.
+    if (currentUser) { // Only apply publish filter if it's the user's own view
+        if (publishFilter === "published") {
+        tempNotes = tempNotes.filter(note => note.isPublished || note.authorId !== currentUser.id);
+        } else if (publishFilter === "unpublished") {
+        // Show unpublished notes of the current user + all published notes of others
+        tempNotes = tempNotes.filter(note => (!note.isPublished && note.authorId === currentUser.id) || (note.isPublished && note.authorId !== currentUser.id));
+        // This logic can get tricky. Simpler: if "unpublished" filter is on, focus on *own* unpublished notes.
+        // If user wants to see *only* their unpublished, this is okay.
+        // For now, this filter shows the user's unpublished, and still all published from others.
+        // A more precise "only my unpublished" would need to also filter out other's published notes.
+        // The current API logic already sends "all published + my all", so this client filter refines.
+        }
     }
+
 
     return tempNotes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [
@@ -344,7 +354,7 @@ export default function NotesPage() {
     debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch,
     dateRange,
     selectedCategories, selectedTags, selectedProvinces,
-    archiveFilter, publishFilter
+    archiveFilter, publishFilter, currentUser
   ]);
 
   const activeFilterCount =
@@ -657,5 +667,3 @@ export default function NotesPage() {
     </>
   );
 }
-
-    

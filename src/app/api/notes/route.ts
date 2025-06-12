@@ -4,22 +4,35 @@ import prisma from '@/lib/prisma';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
+  const authorFilterUserId = searchParams.get('userId'); // For dashboard, or "view all notes by user X"
+  const requestingUserId = searchParams.get('requestingUserId'); // For notes list for the current logged-in user
 
   try {
     const findManyArgs: any = {
       orderBy: { updatedAt: 'desc' },
       include: {
         categories: { select: { id: true, name: true }},
-        author: { select: { username: true }}
+        author: { select: { username: true }} // author username is enough for list views
       },
     };
 
-    if (userId) {
-      // If userId is provided, fetch notes for that specific user (published or not)
-      findManyArgs.where = { authorId: userId };
+    if (authorFilterUserId) {
+      // Use case: Dashboard, or "view all notes by user X"
+      // Fetches ALL notes (published or not) for the specified authorFilterUserId
+      findManyArgs.where = { authorId: authorFilterUserId };
+    } else if (requestingUserId) {
+      // Use case: General notes list for the logged-in user `requestingUserId`
+      // Fetches all globally published notes from ANY author,
+      // AND all notes (published or not) by the `requestingUserId`.
+      findManyArgs.where = {
+        OR: [
+          { isPublished: true },
+          { authorId: requestingUserId }
+        ]
+      };
     } else {
-      // If no userId, fetch all notes that are published
+      // Use case: Public view, no user context provided (e.g., if an unauthenticated part of an app called this)
+      // Show only globally published notes from ANY author.
       findManyArgs.where = { isPublished: true };
     }
 
@@ -30,7 +43,7 @@ export async function GET(request: Request) {
       try {
         if (note.tags && typeof note.tags === 'string') {
           parsedTags = JSON.parse(note.tags);
-        } else if (Array.isArray(note.tags)) { // Handle if it's already an array (e.g. from direct object creation)
+        } else if (Array.isArray(note.tags)) { 
           parsedTags = note.tags;
         }
       } catch (e) {
@@ -126,7 +139,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A note with this title/identifier already exists.', details: 'Unique constraint violation.' }, { status: 409 });
     }
     if (error.code === 'P2003') { 
-        return NextResponse.json({ error: 'Invalid author or category ID.', details: `Foreign key constraint failed. Ensure author and all categories exist.` }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid author or category ID.', details: `Foreign key constraint failed. Ensure author and all categories exist. (Code: ${error.code})` }, { status: 400 });
     }
     if (error.code === 'P2025') { 
         return NextResponse.json({ error: 'Invalid author or category ID.', details: 'One or more referenced authors or categories do not exist.' }, { status: 400 });
@@ -135,5 +148,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create note', details: errorMessage }, { status: 500 });
   }
 }
-
-    
