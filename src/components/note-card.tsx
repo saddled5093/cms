@@ -59,8 +59,6 @@ export default function NoteCard({ note, currentUser, onDelete, onToggleArchive,
               {formatJalali(new Date(note.eventDate), DATE_DISPLAY_FORMAT_CARD, { locale: faIR })}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
           {typeof note.rating === 'number' && note.rating > 0 && (
             <span className="flex items-center" title="امتیاز">
               <Star className="ml-1 h-3.5 w-3.5 fill-yellow-400 text-yellow-500" />
