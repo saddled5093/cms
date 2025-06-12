@@ -23,6 +23,8 @@ export async function GET(request: Request) {
       eventDate: note.eventDate ? note.eventDate.toISOString() : null,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
+      tags: note.tags ? JSON.parse(note.tags) : [],
+      phoneNumbers: note.phoneNumbers ? JSON.parse(note.phoneNumbers) : [],
     })));
   } catch (error: any) {
     console.error('Failed to fetch notes API:', error); // Log the actual error on the server
@@ -48,9 +50,9 @@ export async function POST(request: Request) {
         title,
         content,
         eventDate: new Date(eventDate),
-        tags: tags || [],
+        tags: JSON.stringify(tags || []),
         province,
-        phoneNumbers: phoneNumbers || [],
+        phoneNumbers: JSON.stringify(phoneNumbers || []),
         isArchived: isArchived || false,
         isPublished: isPublished || false,
         authorId: authorId, // This should come from the authenticated user's session
@@ -68,6 +70,8 @@ export async function POST(request: Request) {
         eventDate: newNote.eventDate ? newNote.eventDate.toISOString() : null,
         createdAt: newNote.createdAt.toISOString(),
         updatedAt: newNote.updatedAt.toISOString(),
+        tags: newNote.tags ? JSON.parse(newNote.tags) : [],
+        phoneNumbers: newNote.phoneNumbers ? JSON.parse(newNote.phoneNumbers) : [],
     }, { status: 201 });
   } catch (error: any) {
     console.error('Failed to create note API:', error);
@@ -83,4 +87,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create note', details: errorMessage }, { status: 500 });
   }
 }
-

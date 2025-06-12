@@ -46,6 +46,8 @@ export async function PUT(
       eventDate: updatedNote.eventDate ? updatedNote.eventDate.toISOString() : null,
       createdAt: updatedNote.createdAt.toISOString(),
       updatedAt: updatedNote.updatedAt.toISOString(),
+      tags: updatedNote.tags ? JSON.parse(updatedNote.tags) : [],
+      phoneNumbers: updatedNote.phoneNumbers ? JSON.parse(updatedNote.phoneNumbers) : [],
       comments: updatedNote.comments.map(comment => ({
         ...comment,
         createdAt: comment.createdAt.toISOString(),
