@@ -2,15 +2,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } // Import useRouter for navigation
+import { useParams, useRouter } 
 from 'next/navigation';
 import type { Note, Category, Comment as CommentType } from '@/types';
-import type { NoteFormData } from "@/components/note-form";
-import NoteForm from '@/components/note-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input'; // Keep for general input if needed, but rating changes
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,7 +18,7 @@ import { faIR } from 'date-fns-jalali/locale';
 import { parseISO, isValid as isValidDateFn } from 'date-fns';
 import Link from 'next/link';
 import ConfirmDialog from '@/components/confirm-dialog';
-
+import InteractiveDateDisplay from '@/components/interactive-date-display'; // Import new component
 
 export default function NoteDetailPage() {
   const { noteId } = useParams<{ noteId: string }>();
@@ -30,16 +28,16 @@ export default function NoteDetailPage() {
 
   const [note, setNote] = useState<Note | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  // isEditing state is removed, navigation handles edits
   
-  const [currentRating, setCurrentRating] = useState<number>(0);
   const [newComment, setNewComment] = useState("");
   const [comments, setComments] = useState<CommentType[]>([]);
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isLoadingComments, setIsLoadingComments] = useState(false); // Retained for comment loading
 
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
+
+  const DATE_DISPLAY_FORMAT = 'yyyy/M/d HH:mm';
 
   const processFetchedNote = (fetchedNote: any): Note => {
     let eventDt = fetchedNote.eventDate ? parseISO(fetchedNote.eventDate) : (fetchedNote.createdAt ? parseISO(fetchedNote.createdAt) : new Date());
@@ -57,13 +55,13 @@ export default function NoteDetailPage() {
       categories: Array.isArray(fetchedNote.categories)
         ? fetchedNote.categories.map((c: any) => (typeof c === 'string' ? { id: c, name: c } : (c && c.name ? c : { id: String(c), name: String(c) })))
         : [],
-      tags: Array.isArray(fetchedNote.tags) ? fetchedNote.tags : (typeof fetchedNote.tags === 'string' && fetchedNote.tags.startsWith('[') ? JSON.parse(fetchedNote.tags) : []),
-      phoneNumbers: Array.isArray(fetchedNote.phoneNumbers) ? fetchedNote.phoneNumbers : (typeof fetchedNote.phoneNumbers === 'string' && fetchedNote.phoneNumbers.startsWith('[') ? JSON.parse(fetchedNote.phoneNumbers) : []),
+      tags: Array.isArray(fetchedNote.tags) ? fetchedNote.tags : (typeof fetchedNote.tags === 'string' ? JSON.parse(fetchedNote.tags || "[]") : []),
+      phoneNumbers: Array.isArray(fetchedNote.phoneNumbers) ? fetchedNote.phoneNumbers : (typeof fetchedNote.phoneNumbers === 'string' ? JSON.parse(fetchedNote.phoneNumbers || "[]") : []),
       province: fetchedNote.province || "",
       rating: fetchedNote.rating ?? 0,
       comments: (fetchedNote.comments || []).map((comment: any) => ({
         ...comment,
-        author: comment.author || { username: 'ناشناس', id: 'unknown'}, // Fallback for author
+        author: comment.author || { username: 'ناشناس', id: 'unknown'},
         createdAt: comment.createdAt ? parseISO(comment.createdAt) : new Date(),
         updatedAt: comment.updatedAt ? parseISO(comment.updatedAt) : new Date(),
       })).sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
@@ -78,7 +76,7 @@ export default function NoteDetailPage() {
       if (!response.ok) {
         if (response.status === 404) {
           toast({ title: "خطا", description: "یادداشت مورد نظر یافت نشد.", variant: "destructive" });
-          setNote(null); // Ensure note is null if not found
+          setNote(null); 
         } else {
           const errorData = await response.json();
           throw new Error(errorData.details || errorData.error || 'Failed to fetch note details');
@@ -87,7 +85,6 @@ export default function NoteDetailPage() {
         const data = await response.json();
         const processed = processFetchedNote(data);
         setNote(processed);
-        setCurrentRating(processed.rating || 0);
         setComments(processed.comments || []);
       }
     } catch (error: any) {
@@ -99,53 +96,12 @@ export default function NoteDetailPage() {
     }
   }, [noteId, toast]);
 
-  const fetchAvailableCategories = useCallback(async () => {
-    try {
-      const response = await fetch('/api/categories');
-      if (!response.ok) throw new Error('Failed to fetch categories for form');
-      const data: Category[] = await response.json();
-      setAvailableCategories(data.map(c => ({...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt)})).sort((a,b)=>a.name.localeCompare(b.name, 'fa')));
-    } catch (error) {
-      console.error("Failed to load categories for form", error);
-      toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", description: "لیست دسته‌بندی‌ها برای فرم بارگذاری نشد.", variant: "destructive" });
-    }
-  }, [toast]);
 
   useEffect(() => {
     fetchNoteDetails();
-    fetchAvailableCategories();
-  }, [fetchNoteDetails, fetchAvailableCategories]);
+    // No need to fetch available categories here unless needed for something else on this page
+  }, [fetchNoteDetails]);
 
-  const handleUpdateNote = async (data: NoteFormData) => {
-    if (!note || !currentUser) {
-      toast({ title: "خطا", description: "امکان به‌روزرسانی یادداشت وجود ندارد.", variant: "destructive" });
-      return;
-    }
-    const payload = {
-      ...data,
-      authorId: note.authorId || currentUser.id, // Keep original author or current if missing (should not happen)
-      eventDate: data.eventDate.toISOString(),
-    };
-
-    try {
-      const response = await fetch(`/api/notes/${note.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Failed to update note');
-      }
-      const updatedNoteRaw = await response.json();
-      setNote(processFetchedNote(updatedNoteRaw));
-      toast({ title: "یادداشت با موفقیت به‌روزرسانی شد." });
-      setIsEditing(false);
-    } catch (error: any) {
-      console.error("Failed to update note:", error);
-      toast({ title: "خطا در به‌روزرسانی یادداشت", description: error.message, variant: "destructive" });
-    }
-  };
 
   const handleRatingSubmit = async (ratingValue: number) => {
     if (!note || ratingValue < 0 || ratingValue > 5) {
@@ -164,8 +120,7 @@ export default function NoteDetailPage() {
             throw new Error(errorData.details || errorData.error || 'Failed to update rating');
         }
         const updatedNoteRaw = await response.json();
-        setNote(processFetchedNote(updatedNoteRaw));
-        setCurrentRating(ratingValue);
+        setNote(processFetchedNote(updatedNoteRaw)); // Update local state
         toast({ title: "موفقیت", description: `امتیاز یادداشت به ${ratingValue} تغییر کرد.` });
       } catch (error: any) {
          toast({ title: "خطا", description: error.message || "ثبت امتیاز با مشکل مواجه شد.", variant: "destructive"});
@@ -191,6 +146,7 @@ export default function NoteDetailPage() {
           ...newCommentRaw,
           createdAt: parseISO(newCommentRaw.createdAt),
           updatedAt: parseISO(newCommentRaw.updatedAt),
+          author: { username: currentUser.username }, // Add author from current user
       };
       setComments(prev => [...prev, newCommentData].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
       setNewComment("");
@@ -218,7 +174,7 @@ export default function NoteDetailPage() {
             throw new Error(errorData.details || errorData.error || "Failed to delete note from server");
         }
         toast({ title: "یادداشت حذف شد" });
-        router.push('/notes'); // Navigate back to the list after deletion
+        router.push('/notes'); 
       } catch (error: any) {
         console.error("Failed to delete note:", error);
         toast({ title: "خطا در حذف یادداشت", description: error.message, variant: "destructive" });
@@ -240,7 +196,7 @@ export default function NoteDetailPage() {
         const response = await fetch(`/api/notes/${note.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...note, isArchived: newArchivedState, categoryIds: note.categories.map(c => c.id) }),
+            body: JSON.stringify({ ...note, eventDate: (note.eventDate as Date).toISOString(), isArchived: newArchivedState, categoryIds: note.categories.map(c => c.id) }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -262,7 +218,7 @@ export default function NoteDetailPage() {
          const response = await fetch(`/api/notes/${note.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...note, isPublished: newPublishedState, categoryIds: note.categories.map(c => c.id) }),
+            body: JSON.stringify({ ...note, eventDate: (note.eventDate as Date).toISOString(), isPublished: newPublishedState, categoryIds: note.categories.map(c => c.id) }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -315,9 +271,11 @@ export default function NoteDetailPage() {
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start">
             <CardTitle className="text-3xl font-headline text-primary mb-2 sm:mb-0">{note.title}</CardTitle>
             <div className="flex gap-2 items-center flex-wrap">
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="text-accent hover:text-accent/80">
-                    <Edit3 className="ml-2 h-4 w-4" />
-                    ویرایش
+                <Button variant="outline" size="sm" asChild className="text-accent hover:text-accent/80">
+                    <Link href={`/notes/${note.id}/edit`}>
+                        <Edit3 className="ml-2 h-4 w-4" />
+                        ویرایش
+                    </Link>
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleDeleteRequest} className="text-destructive hover:text-destructive/80">
                     <Trash2 className="ml-2 h-4 w-4" />
@@ -331,10 +289,13 @@ export default function NoteDetailPage() {
                 </Button>
             </div>
           </div>
-          <CardDescription className="text-sm text-muted-foreground mt-2">
-            ایجاد شده توسط: {note.author?.username || 'ناشناس'} در {formatJalali(new Date(note.createdAt), "PPPp", { locale: faIR })}
-            <br />
-            آخرین بروزرسانی: {formatJalali(new Date(note.updatedAt), "PPPp", { locale: faIR })}
+          <CardDescription className="text-sm text-muted-foreground mt-2 space-y-1">
+            <div>
+                ایجاد شده توسط: {note.author?.username || 'ناشناس'} در <InteractiveDateDisplay date={note.createdAt} format={DATE_DISPLAY_FORMAT} />
+            </div>
+            <div>
+                آخرین بروزرسانی: <InteractiveDateDisplay date={note.updatedAt} format={DATE_DISPLAY_FORMAT} />
+            </div>
           </CardDescription>
           <div className="flex gap-1.5 mt-2 flex-wrap items-center">
               {note.isArchived && <Badge variant="secondary" className="text-xs bg-muted/60 text-muted-foreground">آرشیو شده</Badge>}
@@ -349,7 +310,7 @@ export default function NoteDetailPage() {
         <CardContent className="space-y-6">
           <div>
             <h3 className="font-semibold text-foreground mb-1 flex items-center"><CalendarDays className="ml-2 h-4 w-4 text-muted-foreground"/>تاریخ رویداد</h3>
-            <p className="text-foreground/90">{note.eventDate ? formatJalali(new Date(note.eventDate), "PPP", { locale: faIR }) : 'ثبت نشده'}</p>
+            <p className="text-foreground/90">{note.eventDate && isValidDateFn(note.eventDate) ? formatJalali(new Date(note.eventDate), DATE_DISPLAY_FORMAT, { locale: faIR }) : 'ثبت نشده'}</p>
           </div>
 
           <div>
@@ -397,21 +358,33 @@ export default function NoteDetailPage() {
             </div>
           )}
 
-          {/* Admin Rating Section */}
           {currentUser?.role === "ADMIN" && (
             <div className="pt-4 border-t border-border/40">
-              <label htmlFor={`rating-${note.id}`} className="block text-sm font-medium text-foreground mb-1">امتیاز مدیر (۰-۵):</label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  id={`rating-${note.id}`}
-                  min="0"
-                  max="5"
-                  value={currentRating}
-                  onChange={(e) => setCurrentRating(Number(e.target.value))}
-                  className="w-20 bg-input text-foreground"
-                />
-                <Button size="sm" onClick={() => handleRatingSubmit(currentRating)}>ثبت امتیاز</Button>
+              <label className="block text-sm font-medium text-foreground mb-2">امتیاز مدیر (۰-۵):</label>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((starValue) => (
+                  <Button
+                    key={starValue}
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRatingSubmit(starValue)}
+                    aria-label={`امتیاز ${starValue} از 5`}
+                    className="p-1"
+                  >
+                    <Star
+                      className={`h-6 w-6 transition-colors duration-150 ${
+                        (note.rating || 0) >= starValue
+                          ? 'text-yellow-400 fill-yellow-400'
+                          : 'text-muted-foreground hover:text-yellow-300'
+                      }`}
+                    />
+                  </Button>
+                ))}
+                 {(note.rating || 0) > 0 && (
+                    <Button variant="ghost" size="icon" onClick={() => handleRatingSubmit(0)} className="p-1 h-7 w-7 text-xs text-muted-foreground hover:text-destructive" aria-label="حذف امتیاز">
+                        <XCircle className="h-4 w-4" />
+                    </Button>
+                )}
               </div>
             </div>
           )}
@@ -428,7 +401,7 @@ export default function NoteDetailPage() {
                 <div key={comment.id} className="p-3 bg-muted/30 rounded-md">
                     <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.content}</p>
                     <p className="text-xs text-muted-foreground mt-1.5">
-                    توسط: {comment.author.username} در {formatJalali(new Date(comment.createdAt), "PPPp", { locale: faIR })}
+                    توسط: {comment.author.username} در <InteractiveDateDisplay date={comment.createdAt} format={DATE_DISPLAY_FORMAT} />
                     </p>
                 </div>
                 ))}
@@ -455,15 +428,6 @@ export default function NoteDetailPage() {
         </CardFooter>
       </Card>
 
-      {isEditing && (
-        <NoteForm
-          isOpen={isEditing}
-          onClose={() => setIsEditing(false)}
-          onSubmit={handleUpdateNote}
-          initialData={note}
-          availableCategories={availableCategories}
-        />
-      )}
        <ConfirmDialog
           isOpen={!!noteToDeleteId}
           onClose={cancelDelete}
@@ -478,3 +442,6 @@ export default function NoteDetailPage() {
     </div>
   );
 }
+
+
+    

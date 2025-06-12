@@ -4,18 +4,20 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { Note } from "@/types";
-import { Trash2, Archive, ArchiveRestore, Eye, EyeOff, CalendarDays, MapPin } from "lucide-react";
+import { Trash2, Archive, ArchiveRestore, Eye, EyeOff, CalendarDays, MapPin, XCircle } from "lucide-react"; // Added XCircle
 import { format as formatJalali } from 'date-fns-jalali';
 import { faIR } from 'date-fns-jalali/locale';
 import Link from "next/link";
+import { isValid as isValidDateFn } from 'date-fns';
 
 interface NoteCardProps {
   note: Note;
-  // onEdit is removed, navigation will handle edits from detail page
-  onDelete: (noteId: string) => void; // Keep for quick delete from list
-  onToggleArchive: (noteId: string) => void; // Keep for quick archive
-  onTogglePublish: (noteId: string) => void; // Keep for quick publish
+  onDelete: (noteId: string) => void;
+  onToggleArchive: (noteId: string) => void;
+  onTogglePublish: (noteId: string) => void;
 }
+
+const DATE_DISPLAY_FORMAT = 'yyyy/M/d HH:mm';
 
 export default function NoteCard({ note, onDelete, onToggleArchive, onTogglePublish }: NoteCardProps) {
   return (
@@ -31,7 +33,7 @@ export default function NoteCard({ note, onDelete, onToggleArchive, onTogglePubl
 
         <div className="flex items-center text-sm text-foreground/80 pt-0.5">
           <CalendarDays className="ml-2 h-4 w-4 text-muted-foreground" />
-          <span>تاریخ رویداد: {note.eventDate ? formatJalali(new Date(note.eventDate), "PPP", { locale: faIR }) : 'ثبت نشده'}</span>
+          <span>تاریخ رویداد: {note.eventDate && isValidDateFn(new Date(note.eventDate)) ? formatJalali(new Date(note.eventDate), DATE_DISPLAY_FORMAT, { locale: faIR }) : 'ثبت نشده'}</span>
         </div>
 
         {note.province && (
@@ -40,12 +42,9 @@ export default function NoteCard({ note, onDelete, onToggleArchive, onTogglePubl
             <span>{note.province}</span>
           </div>
         )}
-        <p className="text-xs text-muted-foreground pt-2">
-          آخرین بروزرسانی: {formatJalali(new Date(note.updatedAt), "PPPp", { locale: faIR })}
-        </p>
+        {/* "Last updated" removed from here as per request */}
       </Link>
 
-      {/* Action buttons for quick actions from the list view */}
       <div className="flex flex-shrink-0 gap-1.5 p-2 border-t border-border/40 justify-end">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onToggleArchive(note.id)} aria-label={note.isArchived ? "بازیابی یادداشت" : "آرشیو یادداشت"}>
           {note.isArchived ? <ArchiveRestore className="h-4 w-4 text-muted-foreground hover:text-foreground" /> : <Archive className="h-4 w-4 text-muted-foreground hover:text-foreground" />}
@@ -60,3 +59,5 @@ export default function NoteCard({ note, onDelete, onToggleArchive, onTogglePubl
     </div>
   );
 }
+
+    

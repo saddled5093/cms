@@ -3,9 +3,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { Note, Category } from "@/types";
-import type { NoteFormData } from "@/components/note-form"; // Keep for new note creation
+// NoteFormData is now mainly for the new dedicated form pages
 import NoteCard from "@/components/note-card";
-import NoteForm from "@/components/note-form";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format as formatDateFn, startOfDay, endOfDay, parseISO, isValid as isValidDateFn } from 'date-fns';
+import { startOfDay, endOfDay, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
@@ -33,21 +32,19 @@ export default function NotesPage() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
 
   const [titleSearch, setTitleSearch] = useState("");
-  const [contentSearch, setContentSearch] = useState(""); // Keep for potential future detailed list search
-  const [phoneSearch, setPhoneSearch] = useState(""); // Keep for potential future detailed list search
+  const [contentSearch, setContentSearch] = useState("");
+  const [phoneSearch, setPhoneSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const [debouncedTitleSearch, setDebouncedTitleSearch] = useState("");
   const [debouncedContentSearch, setDebouncedContentSearch] = useState("");
   const [debouncedPhoneSearch, setDebouncedPhoneSearch] = useState("");
 
-  // Editing is now handled on the [noteId] page, but creating new notes still uses the form here.
-  const [isFormOpen, setIsFormOpen] = useState(false);
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]); // Still needed for filters
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterStatus>("all");
@@ -71,8 +68,8 @@ export default function NotesPage() {
       categories: Array.isArray(note.categories)
         ? note.categories.map((c: any) => (typeof c === 'string' ? { id: c, name: c } : (c && c.name ? c : { id: String(c), name: String(c) })))
         : [],
-      tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' && note.tags.startsWith('[') ? JSON.parse(note.tags) : []),
-      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' && note.phoneNumbers.startsWith('[') ? JSON.parse(note.phoneNumbers) : []),
+      tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? JSON.parse(note.tags || "[]") : []),
+      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? JSON.parse(note.phoneNumbers || "[]") : []),
       province: note.province || "",
       rating: note.rating ?? 0,
       comments: (note.comments || []).map((comment: any) => ({
@@ -88,6 +85,8 @@ export default function NotesPage() {
     if (!currentUser) return;
     setIsLoadingNotes(true);
     try {
+      // If fetching for "others" (e.g. public notes), the API will handle isPublished filter
+      // For current user, API returns all their notes
       const response = await fetch(`/api/notes?userId=${currentUser.id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch notes');
@@ -115,15 +114,15 @@ export default function NotesPage() {
       const data: Category[] = await response.json();
       setAvailableCategories(data.map(c => ({...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt)})).sort((a,b) => a.name.localeCompare(b.name, 'fa')));
     } catch (error) {
-      console.error("Failed to load categories for form", error);
-      toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", description: "لیست دسته‌بندی‌ها برای فرم بارگذاری نشد.", variant: "destructive" });
+      console.error("Failed to load categories for filter", error);
+      toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", description: "لیست دسته‌بندی‌ها برای فیلتر بارگذاری نشد.", variant: "destructive" });
     }
   }, [toast]);
 
   useEffect(() => {
     if (currentUser) {
       fetchNotes();
-      fetchAvailableCategories();
+      fetchAvailableCategories(); // Still fetch for filters
     }
   }, [currentUser, fetchNotes, fetchAvailableCategories]);
 
@@ -206,41 +205,6 @@ export default function NotesPage() {
     setDateRange(undefined);
   };
 
-  const handleSaveNewNote = async (data: NoteFormData) => { // Renamed from handleSaveNote
-    if (!currentUser) {
-      toast({ title: "خطا", description: "برای ذخیره یادداشت باید وارد شوید.", variant: "destructive" });
-      return;
-    }
-    const payload = {
-      ...data,
-      authorId: currentUser.id,
-      eventDate: data.eventDate.toISOString(),
-    };
-
-    try {
-      const response = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Failed to save new note');
-      }
-      const savedNoteDataRaw = await response.json();
-      const finalNote = processFetchedNote(savedNoteDataRaw);
-
-      setNotes(prevNotes => [finalNote, ...prevNotes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
-      toast({ title: "یادداشت جدید ایجاد شد" });
-      fetchAvailableCategories(); 
-    } catch (error: any) {
-      console.error("Failed to save new note:", error);
-      toast({ title: "خطا در ذخیره یادداشت جدید", description: error.message, variant: "destructive" });
-    }
-
-    setIsFormOpen(false);
-  };
-
   const handleDeleteNoteRequest = (noteId: string) => {
     setNoteToDeleteId(noteId);
     setDeleteConfirmationStep(1);
@@ -281,7 +245,7 @@ export default function NotesPage() {
         const response = await fetch(`/api/notes/${noteId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...noteToUpdate, isArchived: newArchivedState, categoryIds: noteToUpdate.categories.map(c => c.id) }), // Send full note data for update
+            body: JSON.stringify({ ...noteToUpdate, eventDate: (noteToUpdate.eventDate as Date).toISOString(), isArchived: newArchivedState, categoryIds: noteToUpdate.categories.map(c => c.id) }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -306,7 +270,7 @@ export default function NotesPage() {
          const response = await fetch(`/api/notes/${noteId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...noteToUpdate, isPublished: newPublishedState, categoryIds: noteToUpdate.categories.map(c => c.id) }),
+            body: JSON.stringify({ ...noteToUpdate, eventDate: (noteToUpdate.eventDate as Date).toISOString(), isPublished: newPublishedState, categoryIds: noteToUpdate.categories.map(c => c.id) }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -322,7 +286,6 @@ export default function NotesPage() {
     }
   };
 
-  // Rating and comment logic is moved to the [noteId] page
 
   const filteredNotes = useMemo(() => {
     let tempNotes = notes;
@@ -330,10 +293,10 @@ export default function NotesPage() {
     if (debouncedTitleSearch) {
       tempNotes = tempNotes.filter(note => note.title.toLowerCase().includes(debouncedTitleSearch.toLowerCase()));
     }
-    if (debouncedContentSearch) { // Kept for future, but list view is simplified
+    if (debouncedContentSearch) {
       tempNotes = tempNotes.filter(note => note.content.toLowerCase().includes(debouncedContentSearch.toLowerCase()));
     }
-    if (debouncedPhoneSearch) { // Kept for future
+    if (debouncedPhoneSearch) {
       tempNotes = tempNotes.filter(note => note.phoneNumbers.some(pn => pn.includes(debouncedPhoneSearch)));
     }
 
@@ -375,7 +338,6 @@ export default function NotesPage() {
       tempNotes = tempNotes.filter(note => !note.isPublished);
     }
 
-    // Sort by updatedAt by default now as primary sort for list
     return tempNotes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [
     notes,
@@ -396,7 +358,7 @@ export default function NotesPage() {
     (phoneSearch ? 1 : 0) +
     (dateRange?.from ? 1 : 0);
 
-  if (isAuthLoading || (isLoadingNotes && !notes.length)) {
+  if (isAuthLoading || (isLoadingNotes && !notes.length && currentUser)) {
     return (
       <div className="container mx-auto p-4 md:p-8 text-center flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
         <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
@@ -459,11 +421,11 @@ export default function NotesPage() {
                     {dateRange?.from ? (
                       dateRange.to ? (
                         <>
-                          {formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })} -{" "}
-                          {formatJalali(dateRange.to, "LLL dd, y", { locale: faIR })}
+                          {formatJalali(dateRange.from, "yyyy/M/d", { locale: faIR })} -{" "}
+                          {formatJalali(dateRange.to, "yyyy/M/d", { locale: faIR })}
                         </>
                       ) : (
-                        formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })
+                        formatJalali(dateRange.from, "yyyy/M/d", { locale: faIR })
                       )
                     ) : (
                       <span>انتخاب بازه زمانی رویداد</span>
@@ -503,14 +465,14 @@ export default function NotesPage() {
             <h1 className="text-2xl font-headline text-primary">همه یادداشت‌ها</h1>
           </div>
           <Button
-            onClick={() => {
-              setIsFormOpen(true); // This opens the form for a *new* note
-            }}
+            asChild
             className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground shadow-md transition-transform hover:scale-105"
             aria-label="ایجاد یادداشت جدید"
           >
-            <FilePlus className="ml-2 h-5 w-5" />
-            یادداشت جدید
+            <Link href="/notes/new">
+              <FilePlus className="ml-2 h-5 w-5" />
+              یادداشت جدید
+            </Link>
           </Button>
         </div>
 
@@ -680,17 +642,6 @@ export default function NotesPage() {
           </main>
         </div>
 
-        {/* NoteForm is still used for creating NEW notes from this page */}
-        <NoteForm
-          isOpen={isFormOpen}
-          onClose={() => {
-            setIsFormOpen(false);
-          }}
-          onSubmit={handleSaveNewNote}
-          // initialData is undefined for new notes
-          availableCategories={availableCategories}
-        />
-
         <ConfirmDialog
           isOpen={!!noteToDeleteId}
           onClose={cancelDeleteNote}
@@ -706,3 +657,5 @@ export default function NotesPage() {
     </>
   );
 }
+
+    

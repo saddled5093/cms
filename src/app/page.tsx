@@ -2,21 +2,22 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { Note, Category } from "@/types"; // Using updated types
+import type { Note } from "@/types"; 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight, CalendarDays, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts'; // Removed Tooltip from here
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isValid as isValidDateFn } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import { useAuth } from "@/contexts/AuthContext";
 
-
 const MAX_RECENT_NOTES = 5;
+const DATE_DISPLAY_FORMAT_CARD = 'yyyy/M/d HH:mm'; // For cards/lists
+const DATE_DISPLAY_FORMAT_TOOLTIP = 'yyyy/M/d'; // For chart tooltips if different
 
 const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', dateRange?: {start: Date, end: Date}) => {
   const aggregation: { [key: string]: number } = {};
@@ -24,7 +25,7 @@ const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', 
   let filteredNotes = notes;
   if (dateRange && groupBy === 'day') {
     filteredNotes = notes.filter(note => {
-      const noteEventDate = new Date(note.eventDate); // Already a Date object
+      const noteEventDate = new Date(note.eventDate); 
       return isValidDateFn(noteEventDate) && noteEventDate >= dateRange.start && noteEventDate <= dateRange.end;
     });
   }
@@ -33,12 +34,12 @@ const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', 
     if (groupBy === 'day' && dateRange) {
       const noteEventDate = new Date(note.eventDate);
       if (isValidDateFn(noteEventDate)) {
-        const dayKey = formatJalali(noteEventDate, 'yyyy-MM-dd'); // Keep full date for sorting before formatting for display
+        const dayKey = formatJalali(noteEventDate, 'yyyy-MM-dd'); 
         aggregation[dayKey] = (aggregation[dayKey] || 0) + 1;
       }
     } else if (groupBy === 'category') {
       note.categories.forEach(category => {
-        if (category && category.name) { // Ensure category and category.name exist
+        if (category && category.name) { 
           aggregation[category.name] = (aggregation[category.name] || 0) + 1;
         }
       });
@@ -62,7 +63,7 @@ const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', 
   
   return Object.entries(aggregation)
     .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => groupBy === 'day' ? a.name.localeCompare(b.name) : b.value - a.value); // Sort by name for days, by value for others
+    .sort((a, b) => groupBy === 'day' ? a.name.localeCompare(b.name) : b.value - a.value);
 };
 
 
@@ -76,15 +77,13 @@ export default function DashboardPage() {
     if (!currentUser) return;
     setIsLoadingNotes(true);
     try {
-      // API should handle fetching appropriate notes based on user role (e.g., only user's notes or all for admin)
-      const response = await fetch(`/api/notes?userId=${currentUser.id}`); // Or some other logic if admin sees all
+      const response = await fetch(`/api/notes?userId=${currentUser.id}`); 
       if (!response.ok) {
         let errorDetails = 'Failed to fetch notes for dashboard';
         try {
           const errorData = await response.json(); 
           errorDetails = `API Error: ${errorData.error}${errorData.details ? ` - ${errorData.details}` : ''}`;
         } catch (e) {
-          // If parsing error response fails, include status
           errorDetails += ` (Status: ${response.status})`;
         }
         throw new Error(errorDetails);
@@ -93,7 +92,7 @@ export default function DashboardPage() {
 
       const processedNotes = fetchedNotes.map((note: any) => {
          let eventDt = note.eventDate ? parseISO(note.eventDate) : (note.createdAt ? parseISO(note.createdAt) : new Date());
-         if (!isValidDateFn(eventDt)) eventDt = new Date(); // Fallback
+         if (!isValidDateFn(eventDt)) eventDt = new Date(); 
          let createdDt = note.createdAt ? parseISO(note.createdAt) : new Date();
          if (!isValidDateFn(createdDt)) createdDt = new Date();
          let updatedDt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
@@ -105,9 +104,9 @@ export default function DashboardPage() {
           createdAt: createdDt,
           updatedAt: updatedDt,
           categories: Array.isArray(note.categories) ? note.categories.map((c: any) => typeof c === 'string' ? {id: c, name: c} : (c && c.name ? c : {id: String(c), name: String(c)})) : [],
-          tags: Array.isArray(note.tags) ? note.tags : [],
+          tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? JSON.parse(note.tags || "[]") : []),
+          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? JSON.parse(note.phoneNumbers || "[]") : []),
           province: note.province || "", 
-          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : [],
           isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
           isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
         } as Note;
@@ -151,8 +150,8 @@ export default function DashboardPage() {
     const monthEnd = endOfMonth(today);
     const rawData = aggregateData(notes, 'day', { start: monthStart, end: monthEnd });
     return rawData.map(item => ({
-      name: formatJalali(parseISO(item.name), 'dd'), // Format to day number for XAxis label
-      originalDate: item.name, // Keep original for tooltip
+      name: formatJalali(parseISO(item.name), 'dd'), 
+      originalDate: item.name, 
       value: item.value
     }));
   }, [notes]);
@@ -172,7 +171,6 @@ export default function DashboardPage() {
     value: { label: "تعداد یادداشت", color: "hsl(var(--primary))" },
   } satisfies ChartConfig;
 
-  // For Pie and Bar charts where colors are per segment/bar
   const provinceChartConfig = notesByProvinceData.reduce((acc, entry, index) => {
     acc[entry.name] = { label: entry.name, color: CHART_COLORS[index % CHART_COLORS.length] };
     return acc;
@@ -194,7 +192,6 @@ export default function DashboardPage() {
   }
 
   if (!currentUser && !isAuthLoading) {
-    // This case should ideally be handled by AppLayout redirecting to /login
     return (
         <div className="container mx-auto p-4 md:p-8 text-center">
             <p className="text-lg text-destructive">برای مشاهده داشبورد ابتدا باید وارد شوید.</p>
@@ -240,7 +237,7 @@ export default function DashboardPage() {
                       indicator="line" 
                       labelFormatter={(_, payload) => {
                         if (payload && payload.length > 0 && payload[0].payload.originalDate) {
-                           return `روز ${formatJalali(parseISO(payload[0].payload.originalDate), 'do MMMM', { locale: faIR })}`;
+                           return `روز ${formatJalali(parseISO(payload[0].payload.originalDate), 'do MMMM', { locale: faIR })}`; // Keep detailed tooltip
                         }
                         return '';
                       }}
@@ -349,14 +346,14 @@ export default function DashboardPage() {
           {recentNotes.length > 0 ? (
             <div className="space-y-3">
               {recentNotes.map((note) => (
-                <Link href={`/notes#note-${note.id}`} key={note.id} className="block hover:bg-muted/30 p-3 rounded-md transition-colors">
+                <Link href={`/notes/${note.id}`} key={note.id} className="block hover:bg-muted/30 p-3 rounded-md transition-colors">
                   <h3 className="font-semibold text-foreground">{note.title}</h3>
                    <div className="flex items-center text-xs text-muted-foreground mt-1">
                         <CalendarDays className="ml-1.5 h-3.5 w-3.5" />
-                        <span>تاریخ رویداد: {note.eventDate && isValidDateFn(new Date(note.eventDate)) ? formatJalali(new Date(note.eventDate), "PPP", { locale: faIR }) : 'ثبت نشده'}</span>
+                        <span>تاریخ رویداد: {note.eventDate && isValidDateFn(new Date(note.eventDate)) ? formatJalali(new Date(note.eventDate), DATE_DISPLAY_FORMAT_CARD, { locale: faIR }) : 'ثبت نشده'}</span>
                    </div>
                   <p className="text-xs text-muted-foreground">
-                    آخرین بروزرسانی: {note.updatedAt && isValidDateFn(new Date(note.updatedAt)) ? formatJalali(new Date(note.updatedAt), 'PPPp', { locale: faIR }) : 'نامشخص'}
+                    آخرین بروزرسانی: {note.updatedAt && isValidDateFn(new Date(note.updatedAt)) ? formatJalali(new Date(note.updatedAt), DATE_DISPLAY_FORMAT_CARD, { locale: faIR }) : 'نامشخص'}
                   </p>
                   <p className="text-sm text-foreground/80 mt-1 truncate">
                     {note.content.substring(0,100)}{note.content.length > 100 ? '...' : ''}
@@ -373,3 +370,4 @@ export default function DashboardPage() {
   );
 }
 
+    
