@@ -44,7 +44,13 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Calendar as CalendarIcon } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format as formatDateFn } from 'date-fns';
+import { faIR } from 'date-fns/locale/fa-IR';
+import { format as formatJalali } from 'date-fns-jalali';
+import { cn } from "@/lib/utils";
 
 const CATEGORIES_STORAGE_KEY = "not_categories_list";
 
@@ -60,6 +66,7 @@ const iranProvinces = [
 const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
+  eventDate: z.date({ required_error: "انتخاب تاریخ رویداد الزامی است" }),
   categories: z.array(z.string()).optional().default([]), 
   tags: z.string().optional(), 
   province: z.string().min(1, "انتخاب استان الزامی است"),
@@ -71,6 +78,7 @@ const noteFormSchema = z.object({
 export type NoteFormData = {
   title: string;
   content: string;
+  eventDate: Date;
   categories: string[];
   tags: string[];
   province: string;
@@ -96,6 +104,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     defaultValues: {
       title: "",
       content: "",
+      eventDate: new Date(),
       categories: [],
       tags: "",
       province: "",
@@ -126,6 +135,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
         form.reset({
           title: initialData.title || "",
           content: initialData.content || "",
+          eventDate: initialData.eventDate ? new Date(initialData.eventDate) : new Date(),
           categories: initialData.categories || [],
           tags: initialData.tags?.join(", ") || "",
           province: initialData.province || "",
@@ -137,6 +147,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
         form.reset({ 
             title: "", 
             content: "", 
+            eventDate: new Date(),
             categories: [], 
             tags: "", 
             province: "", 
@@ -159,6 +170,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     onSubmit({
       title: data.title,
       content: data.content,
+      eventDate: data.eventDate,
       categories: data.categories || [],
       tags: tagsArray,
       province: data.province,
@@ -219,6 +231,45 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
               </div>
               <div className="md:w-1/3 space-y-6 mt-6 md:mt-0">
                  <FormField
+                  control={form.control}
+                  name="eventDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-foreground">تاریخ رویداد</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "w-full justify-start text-left font-normal bg-input hover:bg-muted/30",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="ml-2 h-4 w-4" />
+                              {field.value ? (
+                                formatJalali(field.value, "PPP", { locale: faIR })
+                              ) : (
+                                <span>یک تاریخ انتخاب کنید</span>
+                              )}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                            locale={faIR}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
                   control={form.control}
                   name="categories"
                   render={({ field }) => (

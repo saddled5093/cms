@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { Note } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight } from "lucide-react"; // Renamed icons to avoid conflict
+import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight, CalendarDays } from "lucide-react"; // Renamed icons to avoid conflict
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from 'recharts'; // Keep recharts primitives
@@ -17,28 +17,28 @@ import { format as formatJalali } from 'date-fns-jalali';
 
 const MAX_RECENT_NOTES = 5;
 
-const aggregateData = (notes: Note[], groupBy: keyof Note | 'day' | 'category', dateRange?: {start: Date, end: Date}) => {
+const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', dateRange?: {start: Date, end: Date}) => {
   const aggregation: { [key: string]: number } = {};
 
   let filteredNotes = notes;
   if (dateRange && groupBy === 'day') {
     filteredNotes = notes.filter(note => {
-      const noteDate = new Date(note.createdAt);
-      return noteDate >= dateRange.start && noteDate <= dateRange.end;
+      const noteEventDate = new Date(note.eventDate); // Use eventDate
+      return noteEventDate >= dateRange.start && noteEventDate <= dateRange.end;
     });
   }
 
   filteredNotes.forEach(note => {
     if (groupBy === 'day' && dateRange) {
-      const dayKey = formatJalali(new Date(note.createdAt), 'yyyy-MM-dd'); // Use ISO format for internal key to ensure correct sorting
+      const dayKey = formatJalali(new Date(note.eventDate), 'yyyy-MM-dd'); // Use eventDate, Use ISO format for internal key
       aggregation[dayKey] = (aggregation[dayKey] || 0) + 1;
     } else if (groupBy === 'category') {
       note.categories.forEach(category => {
         aggregation[category] = (aggregation[category] || 0) + 1;
       });
-    } else if (groupBy !== 'day' && note[groupBy as keyof Note]) {
-      const key = String(note[groupBy as keyof Note]);
-      if (key.trim() !== "") { // Ensure province is not empty
+    } else if (groupBy === 'province' && note.province) {
+      const key = String(note.province);
+      if (key.trim() !== "") { 
          aggregation[key] = (aggregation[key] || 0) + 1;
       }
     }
@@ -76,6 +76,7 @@ export default function DashboardPage() {
           phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
           isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
           isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
+          eventDate: note.eventDate ? parseISO(note.eventDate) : parseISO(note.createdAt), // Use createdAt if eventDate is missing
           createdAt: parseISO(note.createdAt),
           updatedAt: parseISO(note.updatedAt),
         })));
@@ -92,7 +93,7 @@ export default function DashboardPage() {
 
   const recentNotes = useMemo(() => {
     return [...notes]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) // Keep sorting by updatedAt for "recent activity"
       .slice(0, MAX_RECENT_NOTES);
   }, [notes]);
 
@@ -102,8 +103,8 @@ export default function DashboardPage() {
     const monthEnd = endOfMonth(today);
     const rawData = aggregateData(notes, 'day', { start: monthStart, end: monthEnd });
     return rawData.map(item => ({
-      name: formatJalali(parseISO(item.name), 'dd'), // Day number for XAxis label
-      originalDate: item.name, // Keep original date for tooltip
+      name: formatJalali(parseISO(item.name), 'dd'), 
+      originalDate: item.name, 
       value: item.value
     }));
   }, [notes]);
@@ -123,16 +124,10 @@ export default function DashboardPage() {
     value: { label: "تعداد یادداشت", color: "hsl(var(--primary))" },
   } satisfies ChartConfig;
 
-  const provinceChartConfig = {
-    // Dynamic keys based on province names, so use a generic config or rely on cell colors
-    // For legend and tooltip to work well with shadcn components, 
-    // it's better if 'notesByProvinceData' items have a consistent key like 'count' or 'value'.
-    // 'value' is already used.
-    // Let's assume 'name' (province name) will be used directly for labels.
-  } satisfies ChartConfig;
+  const provinceChartConfig = {} satisfies ChartConfig;
   
   const categoryChartConfig = {
-    value: { label: "تعداد یادداشت" }, // For legend, referring to 'value' dataKey in Bar
+    value: { label: "تعداد یادداشت" }, 
   } satisfies ChartConfig;
 
   return (
@@ -154,7 +149,7 @@ export default function DashboardPage() {
               <LChartIcon className="ml-2 h-5 w-5" />
               یادداشت‌های ماه جاری (روزانه)
             </CardTitle>
-            <CardDescription>تعداد یادداشت‌های ایجاد شده در هر روز از ماه جاری</CardDescription>
+            <CardDescription>تعداد یادداشت‌های ایجاد شده (بر اساس تاریخ رویداد) در هر روز از ماه جاری</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px]">
             {notesByDayData.length > 0 ? (
@@ -169,7 +164,7 @@ export default function DashboardPage() {
                       indicator="line" 
                       labelFormatter={(_, payload) => {
                         if (payload && payload.length > 0 && payload[0].payload.originalDate) {
-                           return `روز ${formatJalali(parseISO(payload[0].payload.originalDate), 'do MMMM')}`;
+                           return `روز ${formatJalali(parseISO(payload[0].payload.originalDate), 'do MMMM', { locale: faIR })}`;
                         }
                         return '';
                       }}
@@ -199,7 +194,7 @@ export default function DashboardPage() {
               <PieChart>
                 <ChartTooltip 
                   cursor={false} 
-                  content={<ChartTooltipContent hideLabel />} // hideLabel because Pie nameKey is better
+                  content={<ChartTooltipContent hideLabel />} 
                 />
                 <Pie data={notesByProvinceData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false}
                   label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
@@ -245,14 +240,13 @@ export default function DashboardPage() {
                 <ChartTooltip 
                   cursor={false} 
                   content={<ChartTooltipContent 
-                    // Use YAxis dataKey 'name' (category name) as the label for tooltip
                     labelFormatter={(_, payload) => {
                         if (payload && payload.length > 0) return payload[0].payload.name;
                         return '';
                     }}
                   />} 
                 />
-                <Legend content={<ChartLegendContent />} /> {/* Legend refers to 'value' from config */}
+                <Legend content={<ChartLegendContent />} /> 
                 <Bar dataKey="value" name="تعداد یادداشت" barSize={20} radius={4}>
                    {notesByCategoryData.slice(0,5).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -281,6 +275,10 @@ export default function DashboardPage() {
               {recentNotes.map((note) => (
                 <Link href={`/notes?noteId=${note.id}`} key={note.id} className="block hover:bg-muted/30 p-3 rounded-md transition-colors">
                   <h3 className="font-semibold text-foreground">{note.title}</h3>
+                   <div className="flex items-center text-xs text-muted-foreground mt-1">
+                        <CalendarDays className="ml-1.5 h-3.5 w-3.5" />
+                        <span>تاریخ رویداد: {note.eventDate ? formatJalali(new Date(note.eventDate), "PPP", { locale: faIR }) : 'ثبت نشده'}</span>
+                   </div>
                   <p className="text-xs text-muted-foreground">
                     آخرین بروزرسانی: {formatJalali(new Date(note.updatedAt), 'PPPp', { locale: faIR })}
                   </p>
@@ -298,5 +296,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

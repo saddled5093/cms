@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"; // Card related imports might be adjusted if not used as a "card" anymore
 import { Badge } from "@/components/ui/badge";
 import type { Note } from "@/types";
-import { Edit3, Trash2, Folder, Tag, MapPin, Phone, Archive, ArchiveRestore, Eye, EyeOff } from "lucide-react";
+import { Edit3, Trash2, Folder, Tag, MapPin, Phone, Archive, ArchiveRestore, Eye, EyeOff, CalendarDays } from "lucide-react";
 import { format as formatJalali } from 'date-fns-jalali';
 import { faIR } from 'date-fns-jalali/locale'; // Correct import for faIR locale with date-fns-jalali
 
@@ -23,7 +23,6 @@ export default function NoteCard({ note, onEdit, onDelete, onToggleArchive, onTo
     ? `${note.content.substring(0, MAX_CONTENT_PREVIEW_LENGTH)}...`
     : note.content;
 
-  // Using a div with row-like styling instead of Card component for a list view
   return (
     <div className="flex flex-col md:flex-row items-start md:items-center p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 bg-card text-card-foreground w-full border border-border">
       <div className="flex-grow space-y-2 mb-3 md:mb-0 md:mr-4 rtl:md:ml-4 rtl:md:mr-0">
@@ -34,6 +33,12 @@ export default function NoteCard({ note, onEdit, onDelete, onToggleArchive, onTo
             {note.isPublished && <Badge variant="default" className="text-xs bg-accent/80 text-accent-foreground">منتشر شده</Badge>}
           </div>
         </div>
+        
+        <div className="flex items-center text-sm text-foreground/80 pt-0.5">
+          <CalendarDays className="ml-2 h-4 w-4 text-muted-foreground" />
+          <span>تاریخ رویداد: {note.eventDate ? formatJalali(new Date(note.eventDate), "PPP", { locale: faIR }) : 'ثبت نشده'}</span>
+        </div>
+
         <p className="text-xs text-muted-foreground pt-0.5">
           آخرین بروزرسانی: {formatJalali(new Date(note.updatedAt), "PPPp", { locale: faIR })}
         </p>
@@ -92,5 +97,3 @@ export default function NoteCard({ note, onEdit, onDelete, onToggleArchive, onTo
     </div>
   );
 }
-
-    

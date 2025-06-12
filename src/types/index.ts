@@ -5,11 +5,11 @@ export interface Note {
   content: string;
   categories: string[];
   tags: string[];
-  province: string; // New field for province
-  phoneNumbers: string[]; // New field for multiple phone numbers
+  province: string;
+  phoneNumbers: string[];
+  eventDate: Date; // New field for user-defined date
   createdAt: Date;
   updatedAt: Date;
   isArchived: boolean;
   isPublished: boolean;
 }
-

@@ -10,15 +10,15 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIcon, XCircle } from "lucide-react";
+import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIconLucide, XCircle } from "lucide-react"; // Renamed Calendar to CalendarIconLucide
 import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format as formatDateFn, startOfDay, endOfDay } from 'date-fns';
+import { Calendar } from "@/components/ui/calendar"; // Shadcn Calendar
+import { format as formatDateFn, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
@@ -66,8 +66,9 @@ export default function NotesPage() {
           phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
           isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
           isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
-          createdAt: new Date(note.createdAt),
-          updatedAt: new Date(note.updatedAt),
+          eventDate: note.eventDate ? parseISO(note.eventDate) : parseISO(note.createdAt), // Use createdAt if eventDate is missing
+          createdAt: parseISO(note.createdAt),
+          updatedAt: parseISO(note.updatedAt),
         })));
       }
     } catch (error) {
@@ -174,6 +175,7 @@ export default function NotesPage() {
         id: generateId(),
         title: data.title,
         content: data.content,
+        eventDate: data.eventDate,
         categories: data.categories,
         tags: data.tags,
         province: data.province,
@@ -261,8 +263,8 @@ export default function NotesPage() {
       const endDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
       
       tempNotes = tempNotes.filter(note => {
-        const noteDate = new Date(note.createdAt);
-        return noteDate >= startDate && noteDate <= endDate;
+        const noteEventDate = new Date(note.eventDate); // Filter by eventDate
+        return noteEventDate >= startDate && noteEventDate <= endDate;
       });
     }
 
@@ -294,7 +296,7 @@ export default function NotesPage() {
       tempNotes = tempNotes.filter(note => !note.isPublished);
     }
 
-    return tempNotes.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    return tempNotes.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()); // Sort by eventDate
   }, [
       notes, 
       debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch, 
@@ -355,7 +357,7 @@ export default function NotesPage() {
                             !dateRange && "text-muted-foreground"
                             }`}
                         >
-                            <CalendarIcon className="ml-2 h-4 w-4" />
+                            <CalendarIconLucide className="ml-2 h-4 w-4" />
                             {dateRange?.from ? (
                             dateRange.to ? (
                                 <>
@@ -606,4 +608,3 @@ export default function NotesPage() {
     </>
   );
 }
-    
