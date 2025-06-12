@@ -43,7 +43,7 @@ export async function PUT(
 
     return NextResponse.json({
       ...updatedNote,
-      eventDate: updatedNote.eventDate.toISOString(),
+      eventDate: updatedNote.eventDate ? updatedNote.eventDate.toISOString() : null,
       createdAt: updatedNote.createdAt.toISOString(),
       updatedAt: updatedNote.updatedAt.toISOString(),
       comments: updatedNote.comments.map(comment => ({

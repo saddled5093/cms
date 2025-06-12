@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(notes.map(note => ({
       ...note,
-      eventDate: note.eventDate.toISOString(),
+      eventDate: note.eventDate ? note.eventDate.toISOString() : null,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
     })));
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({
         ...newNote,
-        eventDate: newNote.eventDate.toISOString(),
+        eventDate: newNote.eventDate ? newNote.eventDate.toISOString() : null,
         createdAt: newNote.createdAt.toISOString(),
         updatedAt: newNote.updatedAt.toISOString(),
     }, { status: 201 });
