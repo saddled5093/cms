@@ -79,7 +79,15 @@ export default function DashboardPage() {
       // API should handle fetching appropriate notes based on user role (e.g., only user's notes or all for admin)
       const response = await fetch(`/api/notes?userId=${currentUser.id}`); // Or some other logic if admin sees all
       if (!response.ok) {
-        throw new Error('Failed to fetch notes for dashboard');
+        let errorDetails = 'Failed to fetch notes for dashboard';
+        try {
+          const errorData = await response.json(); 
+          errorDetails = `API Error: ${errorData.error}${errorData.details ? ` - ${errorData.details}` : ''}`;
+        } catch (e) {
+          // If parsing error response fails, include status
+          errorDetails += ` (Status: ${response.status})`;
+        }
+        throw new Error(errorDetails);
       }
       let fetchedNotes: any[] = await response.json();
 
@@ -106,11 +114,11 @@ export default function DashboardPage() {
       });
       setNotes(processedNotes);
 
-    } catch (error) {
-      console.error("Failed to load notes for dashboard from API", error);
+    } catch (error: any) {
+      console.error("Failed to load notes for dashboard from API:", error);
       toast({
-        title: "خطا",
-        description: "بارگذاری یادداشت‌ها برای داشبورد از سرور ممکن نبود.",
+        title: "خطا در بارگذاری داشبورد",
+        description: error.message || "بارگذاری یادداشت‌ها برای داشبورد از سرور ممکن نبود.",
         variant: "destructive",
       });
     } finally {
@@ -364,3 +372,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

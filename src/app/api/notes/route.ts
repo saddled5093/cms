@@ -24,9 +24,10 @@ export async function GET(request: Request) {
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
     })));
-  } catch (error) {
-    console.error('Failed to fetch notes:', error);
-    return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Failed to fetch notes API:', error); // Log the actual error on the server
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred on the server.';
+    return NextResponse.json({ error: 'Failed to fetch notes from API', details: errorMessage }, { status: 500 });
   }
 }
 
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
         updatedAt: newNote.updatedAt.toISOString(),
     }, { status: 201 });
   } catch (error: any) {
-    console.error('Failed to create note:', error);
+    console.error('Failed to create note API:', error);
     if (error.code === 'P2002' && error.meta?.target?.includes('title')) {
       // Example: Handle unique constraint violation for title if you add one
       return NextResponse.json({ error: 'A note with this title already exists.' }, { status: 409 });
@@ -78,6 +79,8 @@ export async function POST(request: Request) {
         // Foreign key constraint failed (e.g. authorId or categoryId does not exist)
         return NextResponse.json({ error: 'Invalid author or category ID.' }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Failed to create note', details: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred on the server.';
+    return NextResponse.json({ error: 'Failed to create note', details: errorMessage }, { status: 500 });
   }
 }
+
