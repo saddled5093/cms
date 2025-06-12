@@ -1,9 +1,11 @@
 "use client";
 import type { ReactNode } from 'react';
+import Header from '@/components/layout/header'; // Import Header
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
+      <Header /> {/* Add Header here */}
       <main className="flex-1">
         {children}
       </main>
