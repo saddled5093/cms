@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Edit3, Check, X, ListChecks, LayoutDashboard, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type { Category } from "@/types"; 
-import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
+import { useAuth } from "@/contexts/AuthContext"; 
 
 
 interface EditableCategory extends Category {
@@ -31,23 +31,17 @@ export default function ManageCategoriesPage() {
     }
     setIsLoadingCategories(true);
     try {
-      // TODO: Replace with API call: GET /api/categories
-      // const response = await fetch('/api/categories'); 
-      // if (!response.ok) throw new Error('Failed to fetch categories');
-      // const fetchedCategories: Category[] = await response.json();
-      
-      // Placeholder until API is ready
-      const placeholderCategories: Category[] = [
-           { id: "cat1_placeholder", name: "عمومی (از سرور)" }, 
-           { id: "cat2_placeholder", name: "کاری (از سرور)"},
-           { id: "cat3_placeholder", name: "شخصی (از سرور)"}
-      ]; 
+      const response = await fetch('/api/categories'); 
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const fetchedCategories: Category[] = await response.json();
       
       setEditableCategories(
-        placeholderCategories.map(cat => ({
+        fetchedCategories.map(cat => ({
           ...cat,
           isEditing: false,
           currentName: cat.name,
+          createdAt: new Date(cat.createdAt), // Ensure dates are Date objects
+          updatedAt: new Date(cat.updatedAt),
         })).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
       );
     } catch (error) {
@@ -79,21 +73,27 @@ export default function ManageCategoriesPage() {
     }
 
     try {
-      // TODO: Replace with API call: POST /api/categories with { name: trimmedNewName }
-      // const response = await fetch('/api/categories', { ... });
-      // const newCategory: Category = await response.json();
+      const response = await fetch('/api/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmedNewName }),
+      });
       
-      const newCategory: Category = { id: Date.now().toString(), name: trimmedNewName }; // Placeholder
-
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to add category');
+      }
+      const newCategory: Category = await response.json();
+      
       setEditableCategories((prev) => 
-          [...prev, { ...newCategory, isEditing: false, currentName: newCategory.name }]
+          [...prev, { ...newCategory, isEditing: false, currentName: newCategory.name, createdAt: new Date(newCategory.createdAt), updatedAt: new Date(newCategory.updatedAt) }]
           .sort((a,b) => a.name.localeCompare(b.name, 'fa'))
       );
       setNewCategoryName("");
       toast({ title: "موفقیت", description: `دسته‌بندی «${trimmedNewName}» اضافه شد.` });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add category", error);
-      toast({ title: "خطا", description: "افزودن دسته‌بندی با مشکل مواجه شد.", variant: "destructive" });
+      toast({ title: "خطا", description: error.message || "افزودن دسته‌بندی با مشکل مواجه شد.", variant: "destructive" });
     }
   };
 
@@ -128,7 +128,12 @@ export default function ManageCategoriesPage() {
       return;
     }
 
-    if (newTrimmedName !== categoryToEdit.name && editableCategories.some(ec => ec.name === newTrimmedName && ec.id !== categoryIdToRename)) {
+    if (newTrimmedName === categoryToEdit.name) { // No change
+        toggleEditMode(categoryIdToRename); // Just close edit mode
+        return;
+    }
+
+    if (editableCategories.some(ec => ec.name === newTrimmedName && ec.id !== categoryIdToRename)) {
       toast({ title: "خطا", description: `دسته‌بندی با نام «${newTrimmedName}» از قبل وجود دارد.`, variant: "destructive" });
       return;
     }
@@ -136,24 +141,29 @@ export default function ManageCategoriesPage() {
     const originalName = categoryToEdit.name;
 
     try {
-      // TODO: Replace with API call: PUT /api/categories/:id with { name: newTrimmedName }
-      // const response = await fetch(`/api/categories/${categoryIdToRename}`, { ... });
-      // const updatedCategory: Category = await response.json();
+      const response = await fetch(`/api/categories/${categoryIdToRename}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newTrimmedName }),
+      });
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to rename category');
+      }
+      const updatedCategory: Category = await response.json();
       
-      const updatedCategory: Category = { ...categoryToEdit, name: newTrimmedName }; // Placeholder
-
       setEditableCategories(prev =>
         prev.map(ec =>
           ec.id === categoryIdToRename
-            ? { ...updatedCategory, isEditing: false, currentName: updatedCategory.name }
+            ? { ...updatedCategory, isEditing: false, currentName: updatedCategory.name, createdAt: new Date(updatedCategory.createdAt), updatedAt: new Date(updatedCategory.updatedAt) }
             : ec
         ).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
       );
       
       toast({ title: "موفقیت", description: `نام دسته‌بندی از «${originalName}» به «${newTrimmedName}» تغییر یافت.` });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to rename category", error);
-      toast({ title: "خطای بروزرسانی دسته‌بندی", description: "تغییر نام دسته‌بندی با مشکل مواجه شد.", variant: "destructive" });
+      toast({ title: "خطای بروزرسانی دسته‌بندی", description: error.message || "تغییر نام دسته‌بندی با مشکل مواجه شد.", variant: "destructive" });
     }
   };
 
@@ -225,7 +235,11 @@ export default function ManageCategoriesPage() {
 
             <div>
               <h3 className="text-lg font-semibold mb-3 text-foreground">لیست دسته‌بندی‌ها</h3>
-              {editableCategories.length > 0 ? (
+              {isLoadingCategories && editableCategories.length === 0 ? (
+                 <div className="text-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+                 </div>
+              ) : editableCategories.length > 0 ? (
                 <ul className="space-y-2">
                   {editableCategories.map((ec) => (
                     <li
@@ -277,6 +291,11 @@ export default function ManageCategoriesPage() {
                             <Edit3 className="h-4 w-4" />
                           </Button>
                         )}
+                        {/* Optional: Delete button can be added here
+                         <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(ec.id)} className="text-destructive hover:text-destructive/80">
+                           <Trash2 className="h-4 w-4" />
+                         </Button>
+                        */}
                       </div>
                     </li>
                   ))}

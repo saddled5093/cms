@@ -72,8 +72,8 @@ export default function NotesPage() {
       categories: Array.isArray(note.categories)
         ? note.categories.map((c: any) => (typeof c === 'string' ? { id: c, name: c } : (c && c.name ? c : { id: String(c), name: String(c) })))
         : [],
-      tags: Array.isArray(note.tags) ? note.tags : [],
-      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : [],
+      tags: Array.isArray(note.tags) ? note.tags : (note.tags && typeof note.tags === 'string' ? JSON.parse(note.tags) : []),
+      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (note.phoneNumbers && typeof note.phoneNumbers === 'string' ? JSON.parse(note.phoneNumbers) : []),
       province: note.province || "",
       rating: note.rating ?? 0,
       comments: (note.comments || []).map((comment: any) => ({
@@ -111,20 +111,15 @@ export default function NotesPage() {
 
   const fetchAvailableCategories = useCallback(async () => {
     try {
-      // Placeholder, assuming categories API might not be ready or used for this specific purpose
-      // const response = await fetch('/api/categories');
-      // if (!response.ok) throw new Error('Failed to fetch categories');
-      // const data: Category[] = await response.json();
-      // setAvailableCategories(data.sort((a,b) => a.name.localeCompare(b.name, 'fa')));
-      const placeholderCategories: Category[] = [
-        // { id: "cat1", name: "عمومی" }, {id: "cat2", name: "کاری"}
-      ];
-      setAvailableCategories(placeholderCategories);
+      const response = await fetch('/api/categories');
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const data: Category[] = await response.json();
+      setAvailableCategories(data.map(c => ({...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt)})).sort((a,b) => a.name.localeCompare(b.name, 'fa')));
     } catch (error) {
-      console.error("Failed to load categories", error);
-      // toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", variant: "destructive" });
+      console.error("Failed to load categories for form", error);
+      toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", description: "لیست دسته‌بندی‌ها برای فرم بارگذاری نشد.", variant: "destructive" });
     }
-  }, []); // Removed toast dependency to avoid loop if toast itself causes re-render.
+  }, [toast]);
 
   useEffect(() => {
     if (currentUser) {
@@ -158,8 +153,11 @@ export default function NotesPage() {
     return Array.from(catMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'fa'));
   }, [notes]);
 
-  const displayableCategories = useMemo(() => {
-    return availableCategories.length > 0 ? availableCategories : allUniqueCategoriesFromNotes;
+  const displayableCategoriesForFilter = useMemo(() => {
+    // For filtering, use categories present in notes if API-fetched categories are empty
+    // or if we want to show only relevant categories.
+    // However, for the NoteForm, we should always use `availableCategories` (fetched from API).
+    return allUniqueCategoriesFromNotes.length > 0 ? allUniqueCategoriesFromNotes : availableCategories;
   }, [availableCategories, allUniqueCategoriesFromNotes]);
 
   const allTags = useMemo(() => {
@@ -263,6 +261,7 @@ export default function NotesPage() {
         setNotes(prevNotes => [finalNote, ...prevNotes]);
         toast({ title: "یادداشت ایجاد شد" });
       }
+      fetchAvailableCategories(); // Re-fetch categories in case a new note used a new one (though less likely with form dropdown)
     } catch (error: any) {
       console.error("Failed to save note:", error);
       toast({ title: "خطا در ذخیره یادداشت", description: error.message, variant: "destructive" });
@@ -292,7 +291,7 @@ export default function NotesPage() {
         // if (!response.ok) throw new Error("Failed to delete note from server");
         
         setNotes(notes.filter((note) => note.id !== noteToDeleteId));
-        toast({ title: "یادداشت حذف شد" }); // Update message based on actual deletion type
+        toast({ title: "یادداشت (به صورت موقت) حذف شد" }); // Update message based on actual deletion type
       } catch (error) {
         console.error("Failed to delete note:", error);
         toast({ title: "خطا در حذف یادداشت", variant: "destructive" });
@@ -313,12 +312,14 @@ export default function NotesPage() {
 
     const newArchivedState = !noteToUpdate.isArchived;
     try {
-        // TODO: Implement PUT /api/notes/:id/archive or similar
-        // For now, optimistic update
+        // TODO: Implement PUT /api/notes/:id/archive or similar for individual field update
+        // For now, optimistic update. A full PUT /api/notes/:id would also work if it handles partial updates.
+        
+        // Example: Simulating an API call or using a general update endpoint
         // const response = await fetch(`/api/notes/${noteId}`, {
-        //     method: 'PUT',
+        //     method: 'PUT', // or PATCH
         //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ isArchived: newArchivedState }),
+        //     body: JSON.stringify({ isArchived: newArchivedState }), // Send only the changed field
         // });
         // if (!response.ok) throw new Error("Failed to update archive status on server");
         // const updatedNoteRaw = await response.json();
@@ -345,18 +346,7 @@ export default function NotesPage() {
 
     const newPublishedState = !noteToUpdate.isPublished;
     try {
-        // TODO: Implement PUT /api/notes/:id/publish or similar
-        // For now, optimistic update
-        // const response = await fetch(`/api/notes/${noteId}`, {
-        //     method: 'PUT',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ isPublished: newPublishedState }),
-        // });
-        // if (!response.ok) throw new Error("Failed to update publish status on server");
-        // const updatedNoteRaw = await response.json();
-        // const updatedNote = processFetchedNote(updatedNoteRaw);
-        // setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
-
+        // TODO: Implement PUT /api/notes/:id/publish or similar for individual field update
         setNotes(prevNotes =>
           prevNotes.map(note =>
             note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
@@ -366,13 +356,12 @@ export default function NotesPage() {
     } catch (error) {
         console.error("Failed to toggle publish status:", error);
         toast({ title: "خطا در تغییر وضعیت انتشار", variant: "destructive" });
-         // Revert optimistic update if API call fails
         setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? { ...note, isPublished: !newPublishedState } : note));
     }
   };
 
   const handleRatingChange = async (noteId: string, rating: number) => {
-    if (!currentUser || currentUser.role !== UserRole.ADMIN) {
+    if (!currentUser || currentUser.role !== "ADMIN") { // String comparison
         toast({ title: "خطا", description: "فقط مدیران می‌توانند امتیاز دهند.", variant: "destructive"});
         return;
     }
@@ -393,7 +382,6 @@ export default function NotesPage() {
     } catch (error: any) {
         console.error("Failed to update rating:", error);
         toast({ title: "خطا در ثبت امتیاز", description: error.message, variant: "destructive" });
-        // Optionally revert optimistic update in NoteCard if needed, or refetch
     }
   };
 
@@ -406,7 +394,7 @@ export default function NotesPage() {
         const response = await fetch(`/api/notes/${noteId}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, authorId: currentUser.id }), // Send authorId
+            body: JSON.stringify({ content, authorId: currentUser.id }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -419,17 +407,15 @@ export default function NotesPage() {
             updatedAt: parseISO(newCommentRaw.updatedAt),
         };
         
-        // Update the specific note's comments
         setNotes(prevNotes => prevNotes.map(n => {
             if (n.id === noteId) {
                 return {
                     ...n,
-                    comments: [...(n.comments || []), newComment]
+                    comments: [...(n.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 };
             }
             return n;
         }));
-        // toast({ title: "موفقیت", description: "نظر شما ثبت شد." }); // Toast moved to NoteCard
     } catch (error: any) {
         console.error("Failed to add comment:", error);
         toast({ title: "خطا در ثبت نظر", description: error.message, variant: "destructive" });
@@ -648,10 +634,10 @@ export default function NotesPage() {
               <CardContent className="space-y-5">
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">دسته‌بندی‌ها</h3>
-                  {displayableCategories.length > 0 ? (
+                  {displayableCategoriesForFilter.length > 0 ? (
                     <ScrollArea className="h-28 pr-3">
                       <div className="flex flex-wrap gap-2">
-                        {displayableCategories.map(category => (
+                        {displayableCategoriesForFilter.map(category => (
                           <Badge
                             key={category.id}
                             variant={selectedCategories.includes(category.id) ? "default" : "secondary"}
@@ -811,7 +797,7 @@ export default function NotesPage() {
           }}
           onSubmit={handleSaveNote}
           initialData={editingNote || undefined}
-          availableCategories={displayableCategories}
+          availableCategories={availableCategories}
         />
 
         <ConfirmDialog
