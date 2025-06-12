@@ -6,11 +6,11 @@ import type { Note } from "@/types";
 import type { NoteFormData } from "@/components/note-form";
 import NoteCard from "@/components/note-card";
 import NoteForm from "@/components/note-form";
-import SearchBar from "@/components/search-bar";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX } from "lucide-react";
+import { FilePlus, ServerCrash, FilterX, Search } from "lucide-react";
 import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +23,15 @@ type PublishFilterStatus = "all" | "published" | "unpublished";
 
 export default function HomePage() {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  
+  const [titleSearch, setTitleSearch] = useState("");
+  const [contentSearch, setContentSearch] = useState("");
+  const [phoneSearch, setPhoneSearch] = useState("");
+
+  const [debouncedTitleSearch, setDebouncedTitleSearch] = useState("");
+  const [debouncedContentSearch, setDebouncedContentSearch] = useState("");
+  const [debouncedPhoneSearch, setDebouncedPhoneSearch] = useState("");
+  
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
@@ -34,7 +41,6 @@ export default function HomePage() {
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterStatus>("all");
   const [publishFilter, setPublishFilter] = useState<PublishFilterStatus>("all");
 
-
   const { toast } = useToast();
 
   useEffect(() => {
@@ -43,10 +49,10 @@ export default function HomePage() {
       if (storedNotes) {
         setNotes(JSON.parse(storedNotes).map((note: any) => ({
           ...note,
-          categories: note.categories || [],
-          tags: note.tags || [],
+          categories: Array.isArray(note.categories) ? note.categories : (typeof note.categories === 'string' ? note.categories.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
+          tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? note.tags.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
           province: note.province || "", 
-          phoneNumbers: note.phoneNumbers || [],
+          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
           isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
           isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
           createdAt: new Date(note.createdAt),
@@ -72,11 +78,19 @@ export default function HomePage() {
   }, [notes]);
   
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 300);
+    const handler = setTimeout(() => setDebouncedTitleSearch(titleSearch), 300);
     return () => clearTimeout(handler);
-  }, [searchTerm]);
+  }, [titleSearch]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedContentSearch(contentSearch), 300);
+    return () => clearTimeout(handler);
+  }, [contentSearch]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedPhoneSearch(phoneSearch), 300);
+    return () => clearTimeout(handler);
+  }, [phoneSearch]);
 
   const allCategories = useMemo(() => {
     const catSet = new Set<string>();
@@ -128,7 +142,9 @@ export default function HomePage() {
     setSelectedProvinces([]);
     setArchiveFilter("all");
     setPublishFilter("all");
-    setSearchTerm("");
+    setTitleSearch("");
+    setContentSearch("");
+    setPhoneSearch("");
   };
 
   const handleSaveNote = (data: NoteFormData) => {
@@ -150,10 +166,10 @@ export default function HomePage() {
         id: generateId(),
         title: data.title,
         content: data.content,
-        categories: data.categories,
-        tags: data.tags,
+        categories: data.categories, // Already an array from NoteForm
+        tags: data.tags, // Already an array from NoteForm
         province: data.province,
-        phoneNumbers: data.phoneNumbers,
+        phoneNumbers: data.phoneNumbers, // Already an array from NoteForm
         isArchived: data.isArchived,
         isPublished: data.isPublished,
         createdAt: new Date(),
@@ -213,17 +229,14 @@ export default function HomePage() {
   const filteredNotes = useMemo(() => {
     let tempNotes = notes;
 
-    if (debouncedSearchTerm) {
-      const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
-      tempNotes = tempNotes.filter(
-        (note) =>
-          note.title.toLowerCase().includes(lowerSearchTerm) ||
-          note.content.toLowerCase().includes(lowerSearchTerm) ||
-          note.categories.some(cat => cat.toLowerCase().includes(lowerSearchTerm)) ||
-          note.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm)) ||
-          note.province.toLowerCase().includes(lowerSearchTerm) ||
-          note.phoneNumbers.some(pn => pn.toLowerCase().includes(lowerSearchTerm))
-      );
+    if (debouncedTitleSearch) {
+      tempNotes = tempNotes.filter(note => note.title.toLowerCase().includes(debouncedTitleSearch.toLowerCase()));
+    }
+    if (debouncedContentSearch) {
+      tempNotes = tempNotes.filter(note => note.content.toLowerCase().includes(debouncedContentSearch.toLowerCase()));
+    }
+    if (debouncedPhoneSearch) {
+      tempNotes = tempNotes.filter(note => note.phoneNumbers.some(pn => pn.includes(debouncedPhoneSearch)));
     }
 
     if (selectedCategories.length > 0) {
@@ -255,7 +268,12 @@ export default function HomePage() {
     }
 
     return tempNotes.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  }, [notes, debouncedSearchTerm, selectedCategories, selectedTags, selectedProvinces, archiveFilter, publishFilter]);
+  }, [
+      notes, 
+      debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch, 
+      selectedCategories, selectedTags, selectedProvinces, 
+      archiveFilter, publishFilter
+    ]);
   
   const activeFilterCount = 
     selectedCategories.length + 
@@ -263,15 +281,48 @@ export default function HomePage() {
     selectedProvinces.length + 
     (archiveFilter !== "all" ? 1 : 0) +
     (publishFilter !== "all" ? 1 : 0) +
-    (searchTerm ? 1 : 0);
+    (titleSearch ? 1 : 0) +
+    (contentSearch ? 1 : 0) +
+    (phoneSearch ? 1 : 0);
 
 
   return (
     <>
       <Header onNewNoteClick={() => { setEditingNote(null); setIsFormOpen(true); }} />
       <div className="container mx-auto p-4 md:p-8">
+        <div className="mb-6 p-4 border rounded-lg shadow bg-card">
+            <h2 className="text-lg font-semibold mb-3 text-primary flex items-center">
+                <Search className="ml-2 h-5 w-5"/>
+                جستجوی پیشرفته
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                    type="text"
+                    placeholder="جستجو بر اساس عنوان..."
+                    value={titleSearch}
+                    onChange={(e) => setTitleSearch(e.target.value)}
+                    className="bg-input placeholder:text-muted-foreground"
+                />
+                <Input
+                    type="text"
+                    placeholder="جستجو بر اساس محتوا..."
+                    value={contentSearch}
+                    onChange={(e) => setContentSearch(e.target.value)}
+                    className="bg-input placeholder:text-muted-foreground"
+                />
+                <Input
+                    type="text"
+                    placeholder="جستجو بر اساس شماره تلفن..."
+                    value={phoneSearch}
+                    onChange={(e) => setPhoneSearch(e.target.value)}
+                    className="bg-input placeholder:text-muted-foreground"
+                />
+            </div>
+        </div>
+
         <div className="mb-8 flex flex-col sm:flex-row gap-4 items-center">
-          <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} className="flex-grow" />
+          {/* SearchBar removed, using advanced search above */}
+          <div className="flex-grow"></div> {/* Spacer */}
           <Button
             onClick={() => {
               setEditingNote(null);
@@ -285,7 +336,7 @@ export default function HomePage() {
           </Button>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-x-8 gap-y-6 mt-8">
+        <div className="flex flex-col lg:flex-row gap-x-8 gap-y-6 mt-2">
           <aside className="lg:w-72 xl:w-80 lg:sticky lg:top-24 h-fit lg:max-h-[calc(100vh-8rem)]">
             <Card className="shadow-lg rounded-lg">
               <CardHeader className="pb-4">
@@ -473,4 +524,3 @@ export default function HomePage() {
     </>
   );
 }
-

@@ -33,7 +33,20 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { Note } from "@/types";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ChevronDown } from "lucide-react";
+
+const CATEGORIES_STORAGE_KEY = "not_categories_list";
 
 const iranProvinces = [
   "البرز", "اردبیل", "آذربایجان شرقی", "آذربایجان غربی", "بوشهر", "چهارمحال و بختیاری",
@@ -47,7 +60,7 @@ const iranProvinces = [
 const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
-  categories: z.string().optional(), 
+  categories: z.array(z.string()).optional().default([]), 
   tags: z.string().optional(), 
   province: z.string().min(1, "انتخاب استان الزامی است"),
   phoneNumbers: z.string().optional(), 
@@ -76,12 +89,14 @@ interface NoteFormProps {
 }
 
 export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: NoteFormProps) {
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+
   const form = useForm<FormSchemaType>({
     resolver: zodResolver(noteFormSchema),
     defaultValues: {
       title: "",
       content: "",
-      categories: "",
+      categories: [],
       tags: "",
       province: "",
       phoneNumbers: "",
@@ -90,13 +105,28 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     },
   });
 
+  const loadAvailableCategories = () => {
+    try {
+      const storedCategories = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+      if (storedCategories) {
+        setAvailableCategories(JSON.parse(storedCategories).sort((a: string, b: string) => a.localeCompare(b, 'fa')));
+      } else {
+        setAvailableCategories([]);
+      }
+    } catch (error) {
+      console.error("Failed to load categories for form", error);
+      setAvailableCategories([]);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
+      loadAvailableCategories();
       if (initialData) {
         form.reset({
           title: initialData.title || "",
           content: initialData.content || "",
-          categories: initialData.categories?.join(", ") || "",
+          categories: initialData.categories || [],
           tags: initialData.tags?.join(", ") || "",
           province: initialData.province || "",
           phoneNumbers: initialData.phoneNumbers?.join(", ") || "",
@@ -104,15 +134,21 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
           isPublished: initialData.isPublished || false,
         });
       } else {
-        form.reset({ title: "", content: "", categories: "", tags: "", province: "", phoneNumbers: "", isArchived: false, isPublished: false });
+        form.reset({ 
+            title: "", 
+            content: "", 
+            categories: [], 
+            tags: "", 
+            province: "", 
+            phoneNumbers: "", 
+            isArchived: false, 
+            isPublished: false 
+        });
       }
     }
   }, [initialData, form, isOpen]);
 
   const handleFormSubmit = (data: FormSchemaType) => {
-    const categoriesArray = data.categories
-      ? data.categories.split(",").map((cat) => cat.trim()).filter(cat => cat)
-      : [];
     const tagsArray = data.tags
       ? data.tags.split(",").map((tag) => tag.trim()).filter(tag => tag)
       : [];
@@ -123,7 +159,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     onSubmit({
       title: data.title,
       content: data.content,
-      categories: categoriesArray,
+      categories: data.categories || [],
       tags: tagsArray,
       province: data.province,
       phoneNumbers: phoneNumbersArray,
@@ -182,6 +218,54 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                 />
               </div>
               <div className="md:w-1/3 space-y-6 mt-6 md:mt-0">
+                 <FormField
+                  control={form.control}
+                  name="categories"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-foreground">دسته‌بندی‌ها</FormLabel>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between bg-input text-foreground data-[placeholder]:text-muted-foreground">
+                            <span className="truncate max-w-[calc(100%-2rem)]">
+                              {field.value && field.value.length > 0
+                                ? field.value.join('، ')
+                                : "انتخاب دسته‌بندی‌ها"}
+                            </span>
+                            <ChevronDown className="mr-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-full min-w-[var(--radix-dropdown-menu-trigger-width)] max-h-60">
+                           <ScrollArea className="h-full">
+                          <DropdownMenuLabel>دسته‌بندی‌های موجود</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {availableCategories.length > 0 ? (
+                            availableCategories.map((category) => (
+                              <DropdownMenuCheckboxItem
+                                key={category}
+                                checked={field.value?.includes(category)}
+                                onCheckedChange={(checked) => {
+                                  const currentCategories = field.value || [];
+                                  const newValue = checked
+                                    ? [...currentCategories, category]
+                                    : currentCategories.filter((c) => c !== category);
+                                  field.onChange(newValue);
+                                }}
+                                onSelect={(e) => e.preventDefault()} // Prevents menu from closing
+                              >
+                                {category}
+                              </DropdownMenuCheckboxItem>
+                            ))
+                          ) : (
+                            <DropdownMenuItem disabled>دسته‌بندی‌ای برای انتخاب وجود ندارد.</DropdownMenuItem>
+                          )}
+                          </ScrollArea>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="province"
@@ -216,20 +300,6 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                         <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
                       </FormControl>
                        <FormDescription className="text-xs">مثال: ۰۹۱۲۳۴۵۶۷۸۹, ۰۲۱۸۷۶۵۴۳۲۱</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="categories"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-foreground">دسته‌بندی‌ها</FormLabel>
-                      <FormControl>
-                        <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
-                      </FormControl>
-                      <FormDescription className="text-xs">مثال: کار، شخصی</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -306,4 +376,3 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     </Dialog>
   );
 }
-
