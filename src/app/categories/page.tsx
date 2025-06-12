@@ -8,14 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Edit3, Check, X, ListChecks, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
-import type { Note } from "@/types";
+import type { Category } from "@/types"; // Assuming Category type exists
+// import type { Note } from "@/types"; // Note type might be needed if updating notes
 
 
-const CATEGORIES_STORAGE_KEY = "not_categories_list";
-const NOTES_STORAGE_KEY = "not_notes";
+// const CATEGORIES_STORAGE_KEY = "not_categories_list"; // Will be fetched/updated via API
+// const NOTES_STORAGE_KEY = "not_notes"; // Notes will be in DB
 
-interface EditableCategory {
-  originalName: string;
+interface EditableCategory extends Category { // Use Category type from src/types
   isEditing: boolean;
   currentName: string;
 }
@@ -27,91 +27,99 @@ export default function ManageCategoriesPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const storedCategories = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-      if (storedCategories) {
-        const parsedCategories: string[] = JSON.parse(storedCategories);
+    const fetchCategories = async () => {
+      setIsLoading(true);
+      try {
+        // const response = await fetch('/api/categories'); // Replace with your API endpoint
+        // if (!response.ok) {
+        //   throw new Error('Failed to fetch categories');
+        // }
+        // const fetchedCategories: Category[] = await response.json();
+        const placeholderCategories: Category[] = [
+             { id: "cat1_placeholder", name: "عمومی (از کت)" }, 
+             { id: "cat2_placeholder", name: "کاری (از کت)"},
+             { id: "cat3_placeholder", name: "شخصی (از کت)"}
+        ]; // Placeholder
+        
         setEditableCategories(
-          parsedCategories.map(name => ({
-            originalName: name,
+          placeholderCategories.map(cat => ({
+            ...cat,
             isEditing: false,
-            currentName: name,
-          })).sort((a,b) => a.originalName.localeCompare(b.originalName, 'fa'))
+            currentName: cat.name,
+          })).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
         );
+      } catch (error) {
+        console.error("Failed to load categories from API", error);
+        toast({
+          title: "خطا",
+          description: "بارگذاری دسته‌بندی‌ها از سرور ممکن نبود.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to load categories from localStorage", error);
-      toast({
-        title: "خطا",
-        description: "بارگذاری دسته‌بندی‌های ذخیره شده ممکن نبود.",
-        variant: "destructive",
-      });
-    }
-    setIsLoading(false);
+    };
+    fetchCategories();
   }, [toast]);
 
-  useEffect(() => {
-    if (!isLoading) {
-      try {
-        const categoryNames = editableCategories.map(ec => ec.originalName).sort((a,b) => a.localeCompare(b, 'fa'));
-        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categoryNames));
-      } catch (error) {
-        console.error("Failed to save categories to localStorage", error);
-      }
-    }
-  }, [editableCategories, isLoading]);
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     const trimmedNewName = newCategoryName.trim();
     if (!trimmedNewName) {
-      toast({
-        title: "خطا",
-        description: "نام دسته‌بندی نمی‌تواند خالی باشد.",
-        variant: "destructive",
-      });
+      toast({ title: "خطا", description: "نام دسته‌بندی نمی‌تواند خالی باشد.", variant: "destructive" });
       return;
     }
-    if (editableCategories.some(ec => ec.originalName === trimmedNewName)) {
-      toast({
-        title: "خطا",
-        description: "این دسته‌بندی از قبل وجود دارد.",
-        variant: "destructive",
-      });
+    if (editableCategories.some(ec => ec.name === trimmedNewName)) {
+      toast({ title: "خطا", description: "این دسته‌بندی از قبل وجود دارد.", variant: "destructive" });
       return;
     }
-    setEditableCategories((prev) => 
-        [...prev, { originalName: trimmedNewName, isEditing: false, currentName: trimmedNewName }]
-        .sort((a,b) => a.originalName.localeCompare(b.originalName, 'fa'))
-    );
-    setNewCategoryName("");
-    toast({
-      title: "موفقیت",
-      description: `دسته‌بندی «${trimmedNewName}» اضافه شد.`,
-    });
+
+    try {
+    //   const response = await fetch('/api/categories', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ name: trimmedNewName }),
+    //   });
+    //   if (!response.ok) {
+    //     throw new Error('Failed to add category');
+    //   }
+    //   const newCategory: Category = await response.json();
+      const newCategory: Category = { id: Date.now().toString(), name: trimmedNewName }; // Placeholder
+
+      setEditableCategories((prev) => 
+          [...prev, { ...newCategory, isEditing: false, currentName: newCategory.name }]
+          .sort((a,b) => a.name.localeCompare(b.name, 'fa'))
+      );
+      setNewCategoryName("");
+      toast({ title: "موفقیت", description: `دسته‌بندی «${trimmedNewName}» اضافه شد.` });
+    } catch (error) {
+      console.error("Failed to add category", error);
+      toast({ title: "خطا", description: "افزودن دسته‌بندی با مشکل مواجه شد.", variant: "destructive" });
+    }
   };
 
-  const toggleEditMode = (originalName: string) => {
+  const toggleEditMode = (categoryId: string) => {
     setEditableCategories(prev =>
       prev.map(ec =>
-        ec.originalName === originalName
-          ? { ...ec, isEditing: !ec.isEditing, currentName: ec.originalName } // Reset currentName on toggle
-          : { ...ec, isEditing: false } // Close other editing inputs
+        ec.id === categoryId
+          ? { ...ec, isEditing: !ec.isEditing, currentName: ec.name } 
+          : { ...ec, isEditing: false } 
       )
     );
   };
 
-  const handleNameChange = (originalName: string, newCurrentName: string) => {
+  const handleNameChange = (categoryId: string, newCurrentName: string) => {
     setEditableCategories(prev =>
       prev.map(ec =>
-        ec.originalName === originalName
+        ec.id === categoryId
           ? { ...ec, currentName: newCurrentName }
           : ec
       )
     );
   };
 
-  const handleSaveRename = (originalNameToRename: string) => {
-    const categoryToEdit = editableCategories.find(ec => ec.originalName === originalNameToRename);
+  const handleSaveRename = async (categoryIdToRename: string) => {
+    const categoryToEdit = editableCategories.find(ec => ec.id === categoryIdToRename);
     if (!categoryToEdit) return;
 
     const newTrimmedName = categoryToEdit.currentName.trim();
@@ -121,46 +129,43 @@ export default function ManageCategoriesPage() {
       return;
     }
 
-    if (newTrimmedName !== originalNameToRename && editableCategories.some(ec => ec.originalName === newTrimmedName)) {
+    if (newTrimmedName !== categoryToEdit.name && editableCategories.some(ec => ec.name === newTrimmedName && ec.id !== categoryIdToRename)) {
       toast({ title: "خطا", description: `دسته‌بندی با نام «${newTrimmedName}» از قبل وجود دارد.`, variant: "destructive" });
       return;
     }
+    
+    const originalName = categoryToEdit.name;
 
-    // Update category list
-    setEditableCategories(prev =>
-      prev.map(ec =>
-        ec.originalName === originalNameToRename
-          ? { originalName: newTrimmedName, isEditing: false, currentName: newTrimmedName }
-          : ec
-      ).sort((a,b) => a.originalName.localeCompare(b.originalName, 'fa'))
-    );
-
-    // Update categories in all notes
     try {
-      const storedNotes = localStorage.getItem(NOTES_STORAGE_KEY);
-      let notes: Note[] = storedNotes ? JSON.parse(storedNotes) : [];
-      let notesUpdated = false;
+    //   const response = await fetch(`/api/categories/${categoryIdToRename}`, {
+    //     method: 'PUT', // or PATCH
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ name: newTrimmedName }),
+    //   });
+    //   if (!response.ok) {
+    //     throw new Error('Failed to rename category');
+    //   }
+    //   const updatedCategory: Category = await response.json();
+      const updatedCategory: Category = { ...categoryToEdit, name: newTrimmedName }; // Placeholder
 
-      notes = notes.map(note => {
-        if (note.categories.includes(originalNameToRename)) {
-          notesUpdated = true;
-          return {
-            ...note,
-            categories: note.categories.map(cat => cat === originalNameToRename ? newTrimmedName : cat),
-            updatedAt: new Date() // Optionally update timestamp
-          };
-        }
-        return note;
-      });
 
-      if (notesUpdated) {
-        localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
-      }
-      toast({ title: "موفقیت", description: `نام دسته‌بندی از «${originalNameToRename}» به «${newTrimmedName}» تغییر یافت.` });
+      setEditableCategories(prev =>
+        prev.map(ec =>
+          ec.id === categoryIdToRename
+            ? { ...updatedCategory, isEditing: false, currentName: updatedCategory.name }
+            : ec
+        ).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
+      );
+      
+      // Note: Updating categories in all notes would now typically be handled by the backend
+      // or through a separate process if relational integrity is maintained in the DB.
+      // If you were to update notes on client-side (not recommended with DB):
+      // localStorage logic for notes would need to fetch, update, and save.
+      
+      toast({ title: "موفقیت", description: `نام دسته‌بندی از «${originalName}» به «${newTrimmedName}» تغییر یافت.` });
     } catch (error) {
-      console.error("Failed to update notes with new category name", error);
-      toast({ title: "خطای بروزرسانی یادداشت‌ها", description: "تغییر نام دسته‌بندی در یادداشت‌ها با مشکل مواجه شد.", variant: "destructive" });
-      // Optionally revert category name change if notes update fails critically
+      console.error("Failed to rename category", error);
+      toast({ title: "خطای بروزرسانی دسته‌بندی", description: "تغییر نام دسته‌بندی با مشکل مواجه شد.", variant: "destructive" });
     }
   };
 
@@ -224,20 +229,20 @@ export default function ManageCategoriesPage() {
                 <ul className="space-y-2">
                   {editableCategories.map((ec) => (
                     <li
-                      key={ec.originalName}
+                      key={ec.id} // Use id as key
                       className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/60 transition-colors"
                     >
                       {ec.isEditing ? (
                         <Input
                           type="text"
                           value={ec.currentName}
-                          onChange={(e) => handleNameChange(ec.originalName, e.target.value)}
+                          onChange={(e) => handleNameChange(ec.id, e.target.value)}
                           className="flex-grow mr-2"
                           autoFocus
-                          onKeyPress={(e) => e.key === 'Enter' && handleSaveRename(ec.originalName)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleSaveRename(ec.id)}
                         />
                       ) : (
-                        <span className="text-foreground">{ec.originalName}</span>
+                        <span className="text-foreground">{ec.name}</span>
                       )}
                       <div className="flex gap-1">
                         {ec.isEditing ? (
@@ -245,8 +250,8 @@ export default function ManageCategoriesPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleSaveRename(ec.originalName)}
-                              aria-label={`ذخیره تغییر نام ${ec.originalName}`}
+                              onClick={() => handleSaveRename(ec.id)}
+                              aria-label={`ذخیره تغییر نام ${ec.name}`}
                               className="text-green-500 hover:text-green-400"
                             >
                               <Check className="h-4 w-4" />
@@ -254,8 +259,8 @@ export default function ManageCategoriesPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => toggleEditMode(ec.originalName)}
-                              aria-label={`لغو تغییر نام ${ec.originalName}`}
+                              onClick={() => toggleEditMode(ec.id)}
+                              aria-label={`لغو تغییر نام ${ec.name}`}
                               className="text-muted-foreground hover:text-foreground"
                             >
                               <X className="h-4 w-4" />
@@ -265,8 +270,8 @@ export default function ManageCategoriesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => toggleEditMode(ec.originalName)}
-                            aria-label={`تغییر نام دسته‌بندی ${ec.originalName}`}
+                            onClick={() => toggleEditMode(ec.id)}
+                            aria-label={`تغییر نام دسته‌بندی ${ec.name}`}
                             className="text-accent hover:text-accent/80"
                           >
                             <Edit3 className="h-4 w-4" />

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { Note } from "@/types";
+import type { Note, Category } from "@/types"; // Updated Note type
 import type { NoteFormData } from "@/components/note-form";
 import NoteCard from "@/components/note-card";
 import NoteForm from "@/components/note-form";
@@ -10,27 +10,28 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIconLucide, XCircle } from "lucide-react"; // Renamed Calendar to CalendarIconLucide
-import Header from "@/components/layout/header";
+import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIconLucide, XCircle } from "lucide-react";
+// Header is now part of AppLayout
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import Link from "next/link";
+import Link from "next/link"; // Keep Link
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar"; // Shadcn Calendar
+import { Calendar } from "@/components/ui/calendar";
 import { format as formatDateFn, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
 
-
-const generateId = () => crypto.randomUUID();
+// TODO: Replace with actual user ID from AuthContext after login
+const MOCK_USER_ID = "user1_id_placeholder"; // Replace with actual logged-in user ID
 
 type ArchiveFilterStatus = "all" | "archived" | "unarchived";
 type PublishFilterStatus = "all" | "published" | "unpublished";
 
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [titleSearch, setTitleSearch] = useState("");
   const [contentSearch, setContentSearch] = useState("");
@@ -46,7 +47,8 @@ export default function NotesPage() {
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
 
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // Store category IDs or names
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterStatus>("all");
@@ -55,51 +57,59 @@ export default function NotesPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const storedNotes = localStorage.getItem("not_notes");
-      if (storedNotes) {
-        setNotes(JSON.parse(storedNotes).map((note: any) => {
-          let parsedEventDate = note.eventDate ? parseISO(note.eventDate) : null;
-          if (!parsedEventDate || !isValid(parsedEventDate)) {
-            parsedEventDate = note.createdAt ? parseISO(note.createdAt) : new Date();
-            if (!isValid(parsedEventDate)) {
-                parsedEventDate = new Date(); // Ultimate fallback
-            }
-          }
-
-          let parsedCreatedAt = note.createdAt ? parseISO(note.createdAt) : new Date();
-          if (!isValid(parsedCreatedAt)) parsedCreatedAt = new Date();
-          
-          let parsedUpdatedAt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
-          if (!isValid(parsedUpdatedAt)) parsedUpdatedAt = new Date();
-
-          return {
-            ...note,
-            categories: Array.isArray(note.categories) ? note.categories : (typeof note.categories === 'string' ? note.categories.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-            tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? note.tags.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-            province: note.province || "", 
-            phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-            isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
-            isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
-            eventDate: parsedEventDate,
-            createdAt: parsedCreatedAt,
-            updatedAt: parsedUpdatedAt,
-          };
+    const fetchNotes = async () => {
+      setIsLoading(true);
+      try {
+        // TODO: In a real app, you might fetch notes for a specific user or based on role
+        // const response = await fetch('/api/notes?userId=currentUser'); 
+        const response = await fetch('/api/notes'); 
+        if (!response.ok) {
+          throw new Error('Failed to fetch notes');
+        }
+        let fetchedNotes: Note[] = await response.json();
+        
+        // Normalize dates from ISO strings to Date objects
+        fetchedNotes = fetchedNotes.map(note => ({
+          ...note,
+          eventDate: note.eventDate ? parseISO(note.eventDate as string) : new Date(),
+          createdAt: note.createdAt ? parseISO(note.createdAt as string) : new Date(),
+          updatedAt: note.updatedAt ? parseISO(note.updatedAt as string) : new Date(),
         }));
-      }
-    } catch (error) {
-      console.error("Failed to load notes from localStorage", error);
-      toast({
-        title: "خطا",
-        description: "بارگذاری یادداشت‌های ذخیره شده ممکن نبود.",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
 
-  useEffect(() => {
-    localStorage.setItem("not_notes", JSON.stringify(notes));
-  }, [notes]);
+        setNotes(fetchedNotes);
+      } catch (error) {
+        console.error("Failed to load notes from API", error);
+        toast({
+          title: "خطا",
+          description: "بارگذاری یادداشت‌ها از سرور ممکن نبود.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const fetchCategories = async () => {
+      try {
+        // This assumes you have an API endpoint for categories
+        // const response = await fetch('/api/categories');
+        // if (!response.ok) throw new Error('Failed to fetch categories');
+        // const data: Category[] = await response.json();
+        // For now, using placeholder categories until API is fully integrated
+        // In a real app, this data would come from `prisma.category.findMany()`
+        const placeholderCategories: Category[] = [
+            // { id: "cat1", name: "عمومی" }, {id: "cat2", name: "کاری"} 
+        ]; // Will be populated by seed or API
+        // setAvailableCategories(data.sort((a,b) => a.name.localeCompare(b.name, 'fa')));
+      } catch (error) {
+        console.error("Failed to load categories from API", error);
+        // toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", variant: "destructive" });
+      }
+    };
+
+    fetchNotes();
+    fetchCategories();
+  }, [toast]);
   
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedTitleSearch(titleSearch), 300);
@@ -118,9 +128,17 @@ export default function NotesPage() {
 
   const allCategories = useMemo(() => {
     const catSet = new Set<string>();
-    notes.forEach(note => note.categories.forEach(cat => catSet.add(cat)));
+    // Assuming note.categories is an array of objects { id: string, name: string }
+    notes.forEach(note => note.categories.forEach(cat => catSet.add(cat.name)));
     return Array.from(catSet).sort((a, b) => a.localeCompare(b, 'fa'));
   }, [notes]);
+  
+  // Or if availableCategories is populated from API:
+  const displayableCategories = useMemo(() => {
+      return availableCategories.length > 0 ? availableCategories : 
+             allCategories.map(name => ({id: name, name})); // Fallback if API categories not loaded
+  }, [availableCategories, allCategories]);
+
 
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -136,11 +154,11 @@ export default function NotesPage() {
     return Array.from(provinceSet).sort((a, b) => a.localeCompare(b, 'fa'));
   }, [notes]);
 
-  const toggleCategoryFilter = (category: string) => {
+  const toggleCategoryFilter = (categoryName: string) => {
     setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
+      prev.includes(categoryName)
+        ? prev.filter(cName => cName !== categoryName)
+        : [...prev, categoryName]
     );
   };
 
@@ -172,41 +190,83 @@ export default function NotesPage() {
     setDateRange(undefined);
   };
 
-  const handleSaveNote = (data: NoteFormData) => {
-    if (editingNote) {
-      setNotes(
-        notes.map((note) =>
-          note.id === editingNote.id
-            ? { 
-                ...note, 
-                ...data, 
-                updatedAt: new Date() 
-              }
-            : note
-        )
-      );
-      toast({ title: "یادداشت به‌روزرسانی شد", description: "یادداشت شما با موفقیت به‌روزرسانی شد." });
-    } else {
-      const newNote: Note = {
-        id: generateId(),
-        title: data.title,
-        content: data.content,
-        eventDate: data.eventDate,
-        categories: data.categories,
-        tags: data.tags,
-        province: data.province,
-        phoneNumbers: data.phoneNumbers,
-        isArchived: data.isArchived,
-        isPublished: data.isPublished,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+  const handleSaveNote = async (data: NoteFormData) => {
+    // TODO: Get actual authorId from AuthContext
+    const payload = { 
+        ...data, 
+        authorId: MOCK_USER_ID, // Replace with actual user ID from session
+        categoryIds: data.categoryIds, // Ensure categoryIds are passed if using them
+        eventDate: data.eventDate.toISOString(), // Send date as ISO string
+    };
+
+    try {
+      let response;
+      let savedNoteData;
+
+      if (editingNote) {
+        // response = await fetch(`/api/notes/${editingNote.id}`, {
+        //   method: 'PUT',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify(payload),
+        // });
+        // For now, use POST to create/update, or implement PUT
+        console.warn("Update (PUT) not fully implemented yet, using optimistic update for now.");
+         setNotes(
+            notes.map((note) =>
+            note.id === editingNote.id
+                ? { 
+                    ...note, 
+                    ...data, 
+                    updatedAt: new Date(),
+                    // Simulate category objects if data.categories are names/ids
+                    categories: data.categories.map(catNameOrId => {
+                        const foundCat = availableCategories.find(ac => ac.id === catNameOrId || ac.name === catNameOrId);
+                        return foundCat || { id: catNameOrId, name: catNameOrId };
+                    })
+                }
+                : note
+            )
+        );
+        savedNoteData = { ...editingNote, ...data, updatedAt: new Date().toISOString() };
+
+      } else {
+        response = await fetch('/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+         if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save note');
+        }
+        savedNoteData = await response.json();
+      }
+
+     
+      // Normalize date from API response
+      const finalNote: Note = {
+        ...savedNoteData,
+        eventDate: parseISO(savedNoteData.eventDate as string),
+        createdAt: parseISO(savedNoteData.createdAt as string),
+        updatedAt: parseISO(savedNoteData.updatedAt as string),
       };
-      setNotes([newNote, ...notes]);
-      toast({ title: "یادداشت ایجاد شد", description: "یادداشت جدید شما ذخیره شد." });
+
+      if (editingNote) {
+        setNotes(notes.map(n => n.id === editingNote.id ? finalNote : n));
+        toast({ title: "یادداشت به‌روزرسانی شد" });
+      } else {
+        setNotes(prevNotes => [finalNote, ...prevNotes]);
+        toast({ title: "یادداشت ایجاد شد" });
+      }
+    } catch (error: any) {
+      console.error("Failed to save note:", error);
+      toast({ title: "خطا در ذخیره یادداشت", description: error.message, variant: "destructive" });
     }
+
     setIsFormOpen(false);
     setEditingNote(null);
   };
+
 
   const handleEditNote = (note: Note) => {
     setEditingNote(note);
@@ -218,12 +278,22 @@ export default function NotesPage() {
     setDeleteConfirmationStep(1);
   };
 
-  const confirmDeleteNote = () => {
+  const confirmDeleteNote = async () => {
     if (deleteConfirmationStep === 1) {
       setDeleteConfirmationStep(2);
     } else if (deleteConfirmationStep === 2 && noteToDeleteId) {
-      setNotes(notes.filter((note) => note.id !== noteToDeleteId));
-      toast({ title: "یادداشت حذف شد", description: "یادداشت حذف گردید." });
+      try {
+        // const response = await fetch(`/api/notes/${noteToDeleteId}`, { method: 'DELETE' });
+        // if (!response.ok) {
+        //   throw new Error('Failed to delete note');
+        // }
+        console.warn("Delete (DELETE) not fully implemented yet, using optimistic update.");
+        setNotes(notes.filter((note) => note.id !== noteToDeleteId));
+        toast({ title: "یادداشت (به صورت محلی) حذف شد" });
+      } catch (error) {
+        console.error("Failed to delete note:", error);
+        toast({ title: "خطا در حذف یادداشت", variant: "destructive" });
+      }
       setNoteToDeleteId(null);
       setDeleteConfirmationStep(1); 
     }
@@ -234,30 +304,66 @@ export default function NotesPage() {
     setDeleteConfirmationStep(1);
   }
 
-  const handleToggleArchive = (noteId: string) => {
+  const handleToggleArchive = async (noteId: string) => {
     const noteToUpdate = notes.find(n => n.id === noteId);
     if (!noteToUpdate) return;
 
     const newArchivedState = !noteToUpdate.isArchived;
+    // Optimistic update
     setNotes(prevNotes =>
       prevNotes.map(note =>
         note.id === noteId ? { ...note, isArchived: newArchivedState, updatedAt: new Date() } : note
       )
     );
-    toast({ title: `یادداشت ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
+    try {
+    //   const response = await fetch(`/api/notes/${noteId}/archive`, { // Example endpoint
+    //     method: 'PATCH', // or PUT
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ isArchived: newArchivedState }),
+    //   });
+    //   if (!response.ok) throw new Error('Failed to update archive status');
+      toast({ title: `یادداشت (محلی) ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
+    } catch (error) {
+      console.error("Failed to toggle archive:", error);
+      toast({ title: "خطا در تغییر وضعیت آرشیو", variant: "destructive" });
+      // Revert optimistic update
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === noteId ? { ...note, isArchived: !newArchivedState, updatedAt: new Date(noteToUpdate.updatedAt) } : note
+        )
+      );
+    }
   };
 
-  const handleTogglePublish = (noteId: string) => {
+  const handleTogglePublish = async (noteId: string) => {
     const noteToUpdate = notes.find(n => n.id === noteId);
     if (!noteToUpdate) return;
     
     const newPublishedState = !noteToUpdate.isPublished;
+    // Optimistic update
     setNotes(prevNotes =>
       prevNotes.map(note =>
         note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
       )
     );
-    toast({ title: `وضعیت انتشار یادداشت ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
+    try {
+    //   const response = await fetch(`/api/notes/${noteId}/publish`, { // Example endpoint
+    //      method: 'PATCH',
+    //      headers: { 'Content-Type': 'application/json' },
+    //      body: JSON.stringify({ isPublished: newPublishedState }),
+    //   });
+    //   if (!response.ok) throw new Error('Failed to update publish status');
+      toast({ title: `وضعیت انتشار یادداشت (محلی) ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
+    } catch (error) {
+      console.error("Failed to toggle publish:", error);
+      toast({ title: "خطا در تغییر وضعیت انتشار", variant: "destructive" });
+      // Revert optimistic update
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === noteId ? { ...note, isPublished: !newPublishedState, updatedAt: new Date(noteToUpdate.updatedAt) } : note
+        )
+      );
+    }
   };
 
 
@@ -279,14 +385,14 @@ export default function NotesPage() {
       const endDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
       
       tempNotes = tempNotes.filter(note => {
-        const noteEventDate = new Date(note.eventDate); // Filter by eventDate
+        const noteEventDate = new Date(note.eventDate);
         return noteEventDate >= startDate && noteEventDate <= endDate;
       });
     }
 
     if (selectedCategories.length > 0) {
       tempNotes = tempNotes.filter(note =>
-        selectedCategories.every(sc => note.categories.includes(sc))
+        selectedCategories.every(scName => note.categories.some(cat => cat.name === scName))
       );
     }
 
@@ -312,7 +418,7 @@ export default function NotesPage() {
       tempNotes = tempNotes.filter(note => !note.isPublished);
     }
 
-    return tempNotes.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()); // Sort by eventDate
+    return tempNotes.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
   }, [
       notes, 
       debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch, 
@@ -332,6 +438,14 @@ export default function NotesPage() {
     (phoneSearch ? 1 : 0) +
     (dateRange?.from ? 1 : 0);
 
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-4 md:p-8 text-center">
+        <p>در حال بارگذاری یادداشت‌ها از سرور...</p>
+        {/* Add a spinner or skeleton loader here */}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -446,20 +560,20 @@ export default function NotesPage() {
               <CardContent className="space-y-5">
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">دسته‌بندی‌ها</h3>
-                  {allCategories.length > 0 ? (
+                  {displayableCategories.length > 0 ? (
                     <ScrollArea className="h-28 pr-3">
                       <div className="flex flex-wrap gap-2">
-                        {allCategories.map(category => (
+                        {displayableCategories.map(category => (
                           <Badge
-                            key={category}
-                            variant={selectedCategories.includes(category) ? "default" : "secondary"}
-                            onClick={() => toggleCategoryFilter(category)}
+                            key={category.id}
+                            variant={selectedCategories.includes(category.name) ? "default" : "secondary"}
+                            onClick={() => toggleCategoryFilter(category.name)}
                             className="cursor-pointer py-1.5 px-3 text-xs transition-all hover:opacity-80"
                             role="button"
                             tabIndex={0}
-                            onKeyDown={(e) => e.key === 'Enter' && toggleCategoryFilter(category)}
+                            onKeyDown={(e) => e.key === 'Enter' && toggleCategoryFilter(category.name)}
                           >
-                            {category}
+                            {category.name}
                           </Badge>
                         ))}
                       </div>
@@ -607,6 +721,8 @@ export default function NotesPage() {
           }}
           onSubmit={handleSaveNote}
           initialData={editingNote || undefined}
+          // Pass availableCategories from API to NoteForm
+          // availableCategories={availableCategoriesFromApi} 
         />
 
         <ConfirmDialog
@@ -624,4 +740,3 @@ export default function NotesPage() {
     </>
   );
 }
-

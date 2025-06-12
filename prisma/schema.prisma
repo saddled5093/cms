@@ -1,0 +1,57 @@
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String // Hashed password
+  role      UserRole @default(USER)
+  notes     Note[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  notes     Note[]   @relation("NoteCategories")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model Note {
+  id           String     @id @default(cuid())
+  title        String
+  content      String
+  eventDate    DateTime
+  tags         String[] // Stored as JSON array in SQLite by Prisma
+  province     String
+  phoneNumbers String[] // Stored as JSON array in SQLite by Prisma
+  isArchived   Boolean    @default(false)
+  isPublished  Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  categories   Category[] @relation("NoteCategories")
+
+  @@map("notes")
+}

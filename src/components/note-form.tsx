@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { Note } from "@/types";
+import type { Note, Category } from "@/types"; // Category type
 import { useEffect, useState } from "react";
 import {
   DropdownMenu,
@@ -47,12 +47,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format as formatDateFn } from 'date-fns';
+// format from date-fns is fine for internal use, formatJalali for display
+import { format as formatDateFn, parseISO } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import { cn } from "@/lib/utils";
 
-const CATEGORIES_STORAGE_KEY = "not_categories_list";
+// const CATEGORIES_STORAGE_KEY = "not_categories_list"; // Will be fetched via API
 
 const iranProvinces = [
   "البرز", "اردبیل", "آذربایجان شرقی", "آذربایجان غربی", "بوشهر", "چهارمحال و بختیاری",
@@ -67,7 +68,7 @@ const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
   eventDate: z.date({ required_error: "انتخاب تاریخ رویداد الزامی است" }),
-  categories: z.array(z.string()).optional().default([]), 
+  categoryIds: z.array(z.string()).optional().default([]), // Store array of category IDs
   tags: z.string().optional(), 
   province: z.string().min(1, "انتخاب استان الزامی است"),
   phoneNumbers: z.string().optional(), 
@@ -79,7 +80,8 @@ export type NoteFormData = {
   title: string;
   content: string;
   eventDate: Date;
-  categories: string[];
+  categories: string[]; // For UI display/selection (can be names or IDs)
+  categoryIds: string[]; // Actual IDs to send to backend
   tags: string[];
   province: string;
   phoneNumbers: string[];
@@ -94,10 +96,11 @@ interface NoteFormProps {
   onClose: () => void;
   onSubmit: (data: NoteFormData) => void;
   initialData?: Partial<Note>;
+  // availableCategories prop might be passed from parent if fetched there
 }
 
 export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: NoteFormProps) {
-  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
 
   const form = useForm<FormSchemaType>({
     resolver: zodResolver(noteFormSchema),
@@ -105,7 +108,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       title: "",
       content: "",
       eventDate: new Date(),
-      categories: [],
+      categoryIds: [],
       tags: "",
       province: "",
       phoneNumbers: "",
@@ -114,29 +117,39 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     },
   });
 
-  const loadAvailableCategories = () => {
+  const loadAvailableCategories = async () => {
     try {
-      const storedCategories = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-      if (storedCategories) {
-        setAvailableCategories(JSON.parse(storedCategories).sort((a: string, b: string) => a.localeCompare(b, 'fa')));
-      } else {
-        setAvailableCategories([]);
-      }
+      // const response = await fetch('/api/categories'); // Fetch from API
+      // if (!response.ok) {
+      //   throw new Error('Failed to fetch categories');
+      // }
+      // const categories: Category[] = await response.json();
+      // setAvailableCategories(categories.sort((a, b) => a.name.localeCompare(b.name, 'fa')));
+      
+      // Placeholder until API is connected:
+       const placeholderCategories: Category[] = [
+        { id: "cat1_placeholder", name: "عمومی (از فرم)" }, 
+        { id: "cat2_placeholder", name: "کاری (از فرم)"},
+        { id: "cat3_placeholder", name: "شخصی (از فرم)"}
+      ];
+      setAvailableCategories(placeholderCategories.sort((a, b) => a.name.localeCompare(b.name, 'fa')));
+
     } catch (error) {
       console.error("Failed to load categories for form", error);
-      setAvailableCategories([]);
+      setAvailableCategories([]); // Keep empty or set some defaults
     }
   };
+  
 
   useEffect(() => {
     if (isOpen) {
-      loadAvailableCategories();
+      loadAvailableCategories(); // Fetch categories when form opens
       if (initialData) {
         form.reset({
           title: initialData.title || "",
           content: initialData.content || "",
-          eventDate: initialData.eventDate ? new Date(initialData.eventDate) : new Date(),
-          categories: initialData.categories || [],
+          eventDate: initialData.eventDate ? (typeof initialData.eventDate === 'string' ? parseISO(initialData.eventDate) : initialData.eventDate) : new Date(),
+          categoryIds: initialData.categories?.map(cat => cat.id) || [], // map to IDs
           tags: initialData.tags?.join(", ") || "",
           province: initialData.province || "",
           phoneNumbers: initialData.phoneNumbers?.join(", ") || "",
@@ -148,7 +161,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
             title: "", 
             content: "", 
             eventDate: new Date(),
-            categories: [], 
+            categoryIds: [], 
             tags: "", 
             province: "", 
             phoneNumbers: "", 
@@ -167,11 +180,17 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       ? data.phoneNumbers.split(",").map((pn) => pn.trim()).filter(pn => pn)
       : [];
     
+    // For categories, we already have categoryIds from the form field
+    const selectedCategoryDetails = data.categoryIds
+        ? data.categoryIds.map(id => availableCategories.find(cat => cat.id === id)?.name || id)
+        : [];
+
     onSubmit({
       title: data.title,
       content: data.content,
       eventDate: data.eventDate,
-      categories: data.categories || [],
+      categories: selectedCategoryDetails, // For UI consistency if needed, or could be removed
+      categoryIds: data.categoryIds || [], // Send IDs to backend
       tags: tagsArray,
       province: data.province,
       phoneNumbers: phoneNumbersArray,
@@ -272,7 +291,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                 />
                 <FormField
                   control={form.control}
-                  name="categories"
+                  name="categoryIds" // Changed from "categories" to "categoryIds"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel className="text-foreground">دسته‌بندی‌ها</FormLabel>
@@ -281,7 +300,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                           <Button variant="outline" className="w-full justify-between bg-input text-foreground data-[placeholder]:text-muted-foreground">
                             <span className="truncate max-w-[calc(100%-2rem)]">
                               {field.value && field.value.length > 0
-                                ? field.value.join('، ')
+                                ? field.value.map(id => availableCategories.find(cat => cat.id === id)?.name || id).join('، ')
                                 : "انتخاب دسته‌بندی‌ها"}
                             </span>
                             <ChevronDown className="mr-auto h-4 w-4 opacity-50" />
@@ -294,18 +313,18 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                           {availableCategories.length > 0 ? (
                             availableCategories.map((category) => (
                               <DropdownMenuCheckboxItem
-                                key={category}
-                                checked={field.value?.includes(category)}
+                                key={category.id}
+                                checked={field.value?.includes(category.id)}
                                 onCheckedChange={(checked) => {
-                                  const currentCategories = field.value || [];
+                                  const currentCategoryIds = field.value || [];
                                   const newValue = checked
-                                    ? [...currentCategories, category]
-                                    : currentCategories.filter((c) => c !== category);
+                                    ? [...currentCategoryIds, category.id]
+                                    : currentCategoryIds.filter((id) => id !== category.id);
                                   field.onChange(newValue);
                                 }}
-                                onSelect={(e) => e.preventDefault()} // Prevents menu from closing
+                                onSelect={(e) => e.preventDefault()} 
                               >
-                                {category}
+                                {category.name}
                               </DropdownMenuCheckboxItem>
                             ))
                           ) : (
@@ -428,4 +447,3 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     </Dialog>
   );
 }
-

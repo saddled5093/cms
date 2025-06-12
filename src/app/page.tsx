@@ -2,39 +2,40 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { Note } from "@/types";
+import type { Note, Category } from "@/types"; // Using updated types
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight, CalendarDays } from "lucide-react"; // Renamed icons to avoid conflict
+import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from 'recharts'; // Keep recharts primitives
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart"; // Import shadcn chart components
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO } from 'date-fns';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isValid } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 
 
 const MAX_RECENT_NOTES = 5;
 
+// This function now expects categories to be an array of objects { id, name }
 const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', dateRange?: {start: Date, end: Date}) => {
   const aggregation: { [key: string]: number } = {};
 
   let filteredNotes = notes;
   if (dateRange && groupBy === 'day') {
     filteredNotes = notes.filter(note => {
-      const noteEventDate = new Date(note.eventDate); // Use eventDate
+      const noteEventDate = new Date(note.eventDate);
       return noteEventDate >= dateRange.start && noteEventDate <= dateRange.end;
     });
   }
 
   filteredNotes.forEach(note => {
     if (groupBy === 'day' && dateRange) {
-      const dayKey = formatJalali(new Date(note.eventDate), 'yyyy-MM-dd'); // Use eventDate, Use ISO format for internal key
+      const dayKey = formatJalali(new Date(note.eventDate), 'yyyy-MM-dd');
       aggregation[dayKey] = (aggregation[dayKey] || 0) + 1;
     } else if (groupBy === 'category') {
-      note.categories.forEach(category => {
-        aggregation[category] = (aggregation[category] || 0) + 1;
+      note.categories.forEach(category => { // category is { id, name }
+        aggregation[category.name] = (aggregation[category.name] || 0) + 1;
       });
     } else if (groupBy === 'province' && note.province) {
       const key = String(note.province);
@@ -62,38 +63,63 @@ const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', 
 
 export default function DashboardPage() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const storedNotes = localStorage.getItem("not_notes");
-      if (storedNotes) {
-        setNotes(JSON.parse(storedNotes).map((note: any) => ({
-          ...note,
-          categories: Array.isArray(note.categories) ? note.categories : (typeof note.categories === 'string' ? note.categories.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-          tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? note.tags.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-          province: note.province || "", 
-          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
-          isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
-          isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
-          eventDate: note.eventDate ? parseISO(note.eventDate) : parseISO(note.createdAt), // Use createdAt if eventDate is missing
-          createdAt: parseISO(note.createdAt),
-          updatedAt: parseISO(note.updatedAt),
-        })));
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch notes from the API
+        // const response = await fetch('/api/notes'); // Or a dedicated dashboard API endpoint
+        // if (!response.ok) {
+        //   throw new Error('Failed to fetch notes for dashboard');
+        // }
+        // let fetchedNotes: Note[] = await response.json();
+        const fetchedNotes: Note[] = []; // Placeholder until API is connected
+
+        // Normalize dates
+        const processedNotes = fetchedNotes.map((note: any) => {
+           let eventDate = note.eventDate ? parseISO(note.eventDate) : (note.createdAt ? parseISO(note.createdAt) : new Date());
+           if (!isValid(eventDate)) eventDate = new Date();
+           let createdAt = note.createdAt ? parseISO(note.createdAt) : new Date();
+           if (!isValid(createdAt)) createdAt = new Date();
+           let updatedAt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
+           if (!isValid(updatedAt)) updatedAt = new Date();
+
+           return {
+            ...note,
+            // Ensure categories is an array of objects {id, name}
+            categories: Array.isArray(note.categories) ? note.categories.map((c: any) => typeof c === 'string' ? {id: c, name: c} : c) : [],
+            tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? note.tags.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
+            province: note.province || "", 
+            phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? note.phoneNumbers.split(',').map((s:string) => s.trim()).filter(Boolean) : []),
+            isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
+            isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
+            eventDate,
+            createdAt,
+            updatedAt,
+          }
+        });
+        setNotes(processedNotes);
+
+      } catch (error) {
+        console.error("Failed to load notes for dashboard from API", error);
+        toast({
+          title: "خطا",
+          description: "بارگذاری یادداشت‌ها برای داشبورد از سرور ممکن نبود.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to load notes from localStorage for dashboard", error);
-      toast({
-        title: "خطا",
-        description: "بارگذاری یادداشت‌ها برای داشبورد ممکن نبود.",
-        variant: "destructive",
-      });
-    }
+    };
+    fetchDashboardData();
   }, [toast]);
 
   const recentNotes = useMemo(() => {
     return [...notes]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) // Keep sorting by updatedAt for "recent activity"
+      .sort((a, b) => new Date(b.updatedAt as string).getTime() - new Date(a.updatedAt as string).getTime())
       .slice(0, MAX_RECENT_NOTES);
   }, [notes]);
 
@@ -124,11 +150,16 @@ export default function DashboardPage() {
     value: { label: "تعداد یادداشت", color: "hsl(var(--primary))" },
   } satisfies ChartConfig;
 
-  const provinceChartConfig = {} satisfies ChartConfig;
+  const provinceChartConfig = {} satisfies ChartConfig; // Colors handled by Cell
   
   const categoryChartConfig = {
-    value: { label: "تعداد یادداشت" }, 
-  } satisfies ChartConfig;
+    // value: { label: "تعداد یادداشت" }, // Not needed if colors are per-bar
+  } satisfies ChartConfig; // Colors handled by Cell
+
+
+  if (isLoading) {
+    return <div className="container mx-auto p-4 md:p-8 text-center">در حال بارگذاری اطلاعات داشبورد...</div>;
+  }
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
@@ -244,9 +275,10 @@ export default function DashboardPage() {
                         if (payload && payload.length > 0) return payload[0].payload.name;
                         return '';
                     }}
+                    formatter={(value, name) => [value, name]} // To show "Name: Value"
                   />} 
                 />
-                <Legend content={<ChartLegendContent />} /> 
+                {/* <Legend content={<ChartLegendContent />} />  Legend might be redundant for vertical bar with labels */}
                 <Bar dataKey="value" name="تعداد یادداشت" barSize={20} radius={4}>
                    {notesByCategoryData.slice(0,5).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -280,7 +312,7 @@ export default function DashboardPage() {
                         <span>تاریخ رویداد: {note.eventDate ? formatJalali(new Date(note.eventDate), "PPP", { locale: faIR }) : 'ثبت نشده'}</span>
                    </div>
                   <p className="text-xs text-muted-foreground">
-                    آخرین بروزرسانی: {formatJalali(new Date(note.updatedAt), 'PPPp', { locale: faIR })}
+                    آخرین بروزرسانی: {formatJalali(new Date(note.updatedAt as string), 'PPPp', { locale: faIR })}
                   </p>
                   <p className="text-sm text-foreground/80 mt-1 truncate">
                     {note.content.substring(0,100)}{note.content.length > 100 ? '...' : ''}
