@@ -32,8 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { Note, Category } from "@/types"; // Category type
-import { useEffect, useState } from "react";
+import type { Note, Category } from "@/types";
+import { useEffect, useState, useCallback } from "react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -47,13 +47,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-// format from date-fns is fine for internal use, formatJalali for display
-import { format as formatDateFn, parseISO } from 'date-fns';
+import { parseISO, isValid as isValidDateFn } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import { cn } from "@/lib/utils";
 
-// const CATEGORIES_STORAGE_KEY = "not_categories_list"; // Will be fetched via API
 
 const iranProvinces = [
   "البرز", "اردبیل", "آذربایجان شرقی", "آذربایجان غربی", "بوشهر", "چهارمحال و بختیاری",
@@ -68,25 +66,25 @@ const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
   eventDate: z.date({ required_error: "انتخاب تاریخ رویداد الزامی است" }),
-  categoryIds: z.array(z.string()).optional().default([]), // Store array of category IDs
+  categoryIds: z.array(z.string()).optional().default([]), 
   tags: z.string().optional(), 
   province: z.string().min(1, "انتخاب استان الزامی است"),
   phoneNumbers: z.string().optional(), 
-  isArchived: z.boolean().optional(),
-  isPublished: z.boolean().optional(),
+  isArchived: z.boolean().optional().default(false),
+  isPublished: z.boolean().optional().default(false),
 });
 
 export type NoteFormData = {
   title: string;
   content: string;
   eventDate: Date;
-  categories: string[]; // For UI display/selection (can be names or IDs)
-  categoryIds: string[]; // Actual IDs to send to backend
+  categoryIds: string[];
   tags: string[];
   province: string;
   phoneNumbers: string[];
   isArchived: boolean;
   isPublished: boolean;
+  // No 'categories' field here anymore, use categoryIds.
 };
 
 type FormSchemaType = z.infer<typeof noteFormSchema>;
@@ -96,12 +94,11 @@ interface NoteFormProps {
   onClose: () => void;
   onSubmit: (data: NoteFormData) => void;
   initialData?: Partial<Note>;
-  // availableCategories prop might be passed from parent if fetched there
+  availableCategories: Category[]; // Passed from parent
 }
 
-export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: NoteFormProps) {
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
-
+export default function NoteForm({ isOpen, onClose, onSubmit, initialData, availableCategories }: NoteFormProps) {
+  
   const form = useForm<FormSchemaType>({
     resolver: zodResolver(noteFormSchema),
     defaultValues: {
@@ -116,43 +113,27 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       isPublished: false,
     },
   });
-
-  const loadAvailableCategories = async () => {
-    try {
-      // const response = await fetch('/api/categories'); // Fetch from API
-      // if (!response.ok) {
-      //   throw new Error('Failed to fetch categories');
-      // }
-      // const categories: Category[] = await response.json();
-      // setAvailableCategories(categories.sort((a, b) => a.name.localeCompare(b.name, 'fa')));
-      
-      // Placeholder until API is connected:
-       const placeholderCategories: Category[] = [
-        { id: "cat1_placeholder", name: "عمومی (از فرم)" }, 
-        { id: "cat2_placeholder", name: "کاری (از فرم)"},
-        { id: "cat3_placeholder", name: "شخصی (از فرم)"}
-      ];
-      setAvailableCategories(placeholderCategories.sort((a, b) => a.name.localeCompare(b.name, 'fa')));
-
-    } catch (error) {
-      console.error("Failed to load categories for form", error);
-      setAvailableCategories([]); // Keep empty or set some defaults
-    }
-  };
   
-
   useEffect(() => {
     if (isOpen) {
-      loadAvailableCategories(); // Fetch categories when form opens
       if (initialData) {
+        let eventDateToSet = new Date();
+        if (initialData.eventDate) {
+            const parsedEventDate = typeof initialData.eventDate === 'string' ? parseISO(initialData.eventDate) : initialData.eventDate;
+            if (isValidDateFn(parsedEventDate)) {
+                eventDateToSet = parsedEventDate;
+            }
+        }
+
         form.reset({
           title: initialData.title || "",
           content: initialData.content || "",
-          eventDate: initialData.eventDate ? (typeof initialData.eventDate === 'string' ? parseISO(initialData.eventDate) : initialData.eventDate) : new Date(),
-          categoryIds: initialData.categories?.map(cat => cat.id) || [], // map to IDs
-          tags: initialData.tags?.join(", ") || "",
+          eventDate: eventDateToSet,
+          // Make sure initialData.categories is an array of {id: string, name: string}
+          categoryIds: Array.isArray(initialData.categories) ? initialData.categories.map(cat => cat.id) : [],
+          tags: Array.isArray(initialData.tags) ? initialData.tags.join(", ") : "",
           province: initialData.province || "",
-          phoneNumbers: initialData.phoneNumbers?.join(", ") || "",
+          phoneNumbers: Array.isArray(initialData.phoneNumbers) ? initialData.phoneNumbers.join(", ") : "",
           isArchived: initialData.isArchived || false,
           isPublished: initialData.isPublished || false,
         });
@@ -160,7 +141,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
         form.reset({ 
             title: "", 
             content: "", 
-            eventDate: new Date(),
+            eventDate: new Date(), // Default to today for new notes
             categoryIds: [], 
             tags: "", 
             province: "", 
@@ -170,7 +151,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
         });
       }
     }
-  }, [initialData, form, isOpen]);
+  }, [initialData, form, isOpen, availableCategories]); // Added availableCategories to dependency array
 
   const handleFormSubmit = (data: FormSchemaType) => {
     const tagsArray = data.tags
@@ -180,31 +161,28 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       ? data.phoneNumbers.split(",").map((pn) => pn.trim()).filter(pn => pn)
       : [];
     
-    // For categories, we already have categoryIds from the form field
-    const selectedCategoryDetails = data.categoryIds
-        ? data.categoryIds.map(id => availableCategories.find(cat => cat.id === id)?.name || id)
-        : [];
-
     onSubmit({
       title: data.title,
       content: data.content,
       eventDate: data.eventDate,
-      categories: selectedCategoryDetails, // For UI consistency if needed, or could be removed
-      categoryIds: data.categoryIds || [], // Send IDs to backend
+      categoryIds: data.categoryIds || [],
       tags: tagsArray,
       province: data.province,
       phoneNumbers: phoneNumbersArray,
       isArchived: data.isArchived || false,
       isPublished: data.isPublished || false,
     });
-    form.reset();
+    // form.reset(); // Reset is handled by onOpenChange for Dialog
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
         onClose();
-        form.reset(); 
+        form.reset({ // Reset to default when closing
+            title: "", content: "", eventDate: new Date(), categoryIds: [], tags: "", 
+            province: "", phoneNumbers: "", isArchived: false, isPublished: false 
+        }); 
       }
     }}>
       <DialogContent className="sm:max-w-3xl bg-card text-card-foreground rounded-lg shadow-xl">
@@ -266,7 +244,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                               )}
                             >
                               <CalendarIcon className="ml-2 h-4 w-4" />
-                              {field.value ? (
+                              {field.value && isValidDateFn(field.value) ? (
                                 formatJalali(field.value, "PPP", { locale: faIR })
                               ) : (
                                 <span>یک تاریخ انتخاب کنید</span>
@@ -291,7 +269,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                 />
                 <FormField
                   control={form.control}
-                  name="categoryIds" // Changed from "categories" to "categoryIds"
+                  name="categoryIds"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel className="text-foreground">دسته‌بندی‌ها</FormLabel>
@@ -368,7 +346,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                     <FormItem>
                       <FormLabel className="text-foreground">شماره‌های تلفن</FormLabel>
                       <FormControl>
-                        <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                        <Input placeholder="با کاما جدا کنید" {...field} value={field.value || ""} className="bg-input text-foreground placeholder:text-muted-foreground"/>
                       </FormControl>
                        <FormDescription className="text-xs">مثال: ۰۹۱۲۳۴۵۶۷۸۹, ۰۲۱۸۷۶۵۴۳۲۱</FormDescription>
                       <FormMessage />
@@ -382,7 +360,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                     <FormItem>
                       <FormLabel className="text-foreground">تگ‌ها</FormLabel>
                       <FormControl>
-                        <Input placeholder="با کاما جدا کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                        <Input placeholder="با کاما جدا کنید" {...field} value={field.value || ""} className="bg-input text-foreground placeholder:text-muted-foreground"/>
                       </FormControl>
                        <FormDescription className="text-xs">مثال: مهم، فوری</FormDescription>
                       <FormMessage />
@@ -433,7 +411,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
             </div>
             <DialogFooter className="sm:justify-end gap-2 pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); }}>
+                <Button type="button" variant="outline" onClick={() => { onClose(); /* form.reset() handled by onOpenChange */; }}>
                   انصراف
                 </Button>
               </DialogClose>

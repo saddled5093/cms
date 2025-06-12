@@ -1,66 +1,70 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Check, X, ListChecks, LayoutDashboard } from "lucide-react";
+import { PlusCircle, Edit3, Check, X, ListChecks, LayoutDashboard, Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { Category } from "@/types"; // Assuming Category type exists
-// import type { Note } from "@/types"; // Note type might be needed if updating notes
+import type { Category } from "@/types"; 
+import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 
 
-// const CATEGORIES_STORAGE_KEY = "not_categories_list"; // Will be fetched/updated via API
-// const NOTES_STORAGE_KEY = "not_notes"; // Notes will be in DB
-
-interface EditableCategory extends Category { // Use Category type from src/types
+interface EditableCategory extends Category {
   isEditing: boolean;
   currentName: string;
 }
 
 export default function ManageCategoriesPage() {
+  const { currentUser, isLoading: isAuthLoading } = useAuth();
   const [editableCategories, setEditableCategories] = useState<EditableCategory[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const { toast } = useToast();
 
+  const fetchCategories = useCallback(async () => {
+    if (!currentUser || currentUser.role !== 'ADMIN') {
+        setIsLoadingCategories(false);
+        return;
+    }
+    setIsLoadingCategories(true);
+    try {
+      // TODO: Replace with API call: GET /api/categories
+      // const response = await fetch('/api/categories'); 
+      // if (!response.ok) throw new Error('Failed to fetch categories');
+      // const fetchedCategories: Category[] = await response.json();
+      
+      // Placeholder until API is ready
+      const placeholderCategories: Category[] = [
+           { id: "cat1_placeholder", name: "عمومی (از سرور)" }, 
+           { id: "cat2_placeholder", name: "کاری (از سرور)"},
+           { id: "cat3_placeholder", name: "شخصی (از سرور)"}
+      ]; 
+      
+      setEditableCategories(
+        placeholderCategories.map(cat => ({
+          ...cat,
+          isEditing: false,
+          currentName: cat.name,
+        })).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
+      );
+    } catch (error) {
+      console.error("Failed to load categories", error);
+      toast({
+        title: "خطا",
+        description: "بارگذاری دسته‌بندی‌ها با مشکل مواجه شد.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  }, [currentUser, toast]);
+
   useEffect(() => {
-    const fetchCategories = async () => {
-      setIsLoading(true);
-      try {
-        // const response = await fetch('/api/categories'); // Replace with your API endpoint
-        // if (!response.ok) {
-        //   throw new Error('Failed to fetch categories');
-        // }
-        // const fetchedCategories: Category[] = await response.json();
-        const placeholderCategories: Category[] = [
-             { id: "cat1_placeholder", name: "عمومی (از کت)" }, 
-             { id: "cat2_placeholder", name: "کاری (از کت)"},
-             { id: "cat3_placeholder", name: "شخصی (از کت)"}
-        ]; // Placeholder
-        
-        setEditableCategories(
-          placeholderCategories.map(cat => ({
-            ...cat,
-            isEditing: false,
-            currentName: cat.name,
-          })).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
-        );
-      } catch (error) {
-        console.error("Failed to load categories from API", error);
-        toast({
-          title: "خطا",
-          description: "بارگذاری دسته‌بندی‌ها از سرور ممکن نبود.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchCategories();
-  }, [toast]);
+  }, [fetchCategories]);
 
 
   const handleAddCategory = async () => {
@@ -75,15 +79,10 @@ export default function ManageCategoriesPage() {
     }
 
     try {
-    //   const response = await fetch('/api/categories', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ name: trimmedNewName }),
-    //   });
-    //   if (!response.ok) {
-    //     throw new Error('Failed to add category');
-    //   }
-    //   const newCategory: Category = await response.json();
+      // TODO: Replace with API call: POST /api/categories with { name: trimmedNewName }
+      // const response = await fetch('/api/categories', { ... });
+      // const newCategory: Category = await response.json();
+      
       const newCategory: Category = { id: Date.now().toString(), name: trimmedNewName }; // Placeholder
 
       setEditableCategories((prev) => 
@@ -137,17 +136,11 @@ export default function ManageCategoriesPage() {
     const originalName = categoryToEdit.name;
 
     try {
-    //   const response = await fetch(`/api/categories/${categoryIdToRename}`, {
-    //     method: 'PUT', // or PATCH
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ name: newTrimmedName }),
-    //   });
-    //   if (!response.ok) {
-    //     throw new Error('Failed to rename category');
-    //   }
-    //   const updatedCategory: Category = await response.json();
+      // TODO: Replace with API call: PUT /api/categories/:id with { name: newTrimmedName }
+      // const response = await fetch(`/api/categories/${categoryIdToRename}`, { ... });
+      // const updatedCategory: Category = await response.json();
+      
       const updatedCategory: Category = { ...categoryToEdit, name: newTrimmedName }; // Placeholder
-
 
       setEditableCategories(prev =>
         prev.map(ec =>
@@ -157,11 +150,6 @@ export default function ManageCategoriesPage() {
         ).sort((a,b) => a.name.localeCompare(b.name, 'fa'))
       );
       
-      // Note: Updating categories in all notes would now typically be handled by the backend
-      // or through a separate process if relational integrity is maintained in the DB.
-      // If you were to update notes on client-side (not recommended with DB):
-      // localStorage logic for notes would need to fetch, update, and save.
-      
       toast({ title: "موفقیت", description: `نام دسته‌بندی از «${originalName}» به «${newTrimmedName}» تغییر یافت.` });
     } catch (error) {
       console.error("Failed to rename category", error);
@@ -170,12 +158,24 @@ export default function ManageCategoriesPage() {
   };
 
 
-  if (isLoading) {
+  if (isAuthLoading || (isLoadingCategories && !editableCategories.length)) {
     return (
-      <div className="container mx-auto p-4 md:p-8 text-center">
-        <p>در حال بارگذاری دسته‌بندی‌ها...</p>
+      <div className="container mx-auto p-4 md:p-8 text-center flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <p className="text-lg text-foreground">در حال بارگذاری دسته‌بندی‌ها...</p>
       </div>
     );
+  }
+
+  if (!currentUser || currentUser.role !== 'ADMIN') {
+    return (
+        <div className="container mx-auto p-4 md:p-8 text-center">
+            <p className="text-lg text-destructive">شما اجازه دسترسی به این صفحه را ندارید.</p>
+            <Button asChild className="mt-4">
+                <Link href="/">بازگشت به داشبورد</Link>
+            </Button>
+        </div>
+    )
   }
 
   return (
@@ -213,7 +213,7 @@ export default function ManageCategoriesPage() {
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="نام دسته‌بندی جدید"
-                  className="flex-grow"
+                  className="flex-grow bg-input text-foreground placeholder:text-muted-foreground"
                   onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
                 />
                 <Button onClick={handleAddCategory} className="bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -229,7 +229,7 @@ export default function ManageCategoriesPage() {
                 <ul className="space-y-2">
                   {editableCategories.map((ec) => (
                     <li
-                      key={ec.id} // Use id as key
+                      key={ec.id}
                       className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/60 transition-colors"
                     >
                       {ec.isEditing ? (
@@ -237,7 +237,7 @@ export default function ManageCategoriesPage() {
                           type="text"
                           value={ec.currentName}
                           onChange={(e) => handleNameChange(ec.id, e.target.value)}
-                          className="flex-grow mr-2"
+                          className="flex-grow mr-2 bg-input text-foreground"
                           autoFocus
                           onKeyPress={(e) => e.key === 'Enter' && handleSaveRename(ec.id)}
                         />

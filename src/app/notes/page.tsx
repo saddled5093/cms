@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import type { Note, Category } from "@/types"; // Updated Note type
+import { useState, useEffect, useMemo, useCallback } from "react"; // Added useCallback
+import type { Note, Category } from "@/types";
 import type { NoteFormData } from "@/components/note-form";
 import NoteCard from "@/components/note-card";
 import NoteForm from "@/components/note-form";
@@ -10,28 +10,26 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIconLucide, XCircle } from "lucide-react";
-// Header is now part of AppLayout
+import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIconLucide, XCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import Link from "next/link"; // Keep Link
+import Link from "next/link"; 
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format as formatDateFn, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
+import { format as formatDateFn, startOfDay, endOfDay, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
-
-// TODO: Replace with actual user ID from AuthContext after login
-const MOCK_USER_ID = "user1_id_placeholder"; // Replace with actual logged-in user ID
+import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 
 type ArchiveFilterStatus = "all" | "archived" | "unarchived";
 type PublishFilterStatus = "all" | "published" | "unpublished";
 
 export default function NotesPage() {
+  const { currentUser, isLoading: isAuthLoading } = useAuth(); // Get currentUser
   const [notes, setNotes] = useState<Note[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(true);
   
   const [titleSearch, setTitleSearch] = useState("");
   const [contentSearch, setContentSearch] = useState("");
@@ -47,7 +45,7 @@ export default function NotesPage() {
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
 
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // Store category IDs or names
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
@@ -56,60 +54,81 @@ export default function NotesPage() {
 
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchNotes = async () => {
-      setIsLoading(true);
-      try {
-        // TODO: In a real app, you might fetch notes for a specific user or based on role
-        // const response = await fetch('/api/notes?userId=currentUser'); 
-        const response = await fetch('/api/notes'); 
-        if (!response.ok) {
-          throw new Error('Failed to fetch notes');
-        }
-        let fetchedNotes: Note[] = await response.json();
-        
-        // Normalize dates from ISO strings to Date objects
-        fetchedNotes = fetchedNotes.map(note => ({
+  const fetchNotes = useCallback(async () => {
+    if (!currentUser) return; // Don't fetch if no user
+    setIsLoadingNotes(true);
+    try {
+      // TODO: Add query param for authorId if non-admin, or fetch all if admin
+      // For now, assuming API filters by author or returns all if admin.
+      const response = await fetch(`/api/notes?userId=${currentUser.id}`); 
+      if (!response.ok) {
+        throw new Error('Failed to fetch notes');
+      }
+      let fetchedNotes: any[] = await response.json();
+      
+      fetchedNotes = fetchedNotes.map(note => {
+        let eventDt = note.eventDate ? parseISO(note.eventDate) : (note.createdAt ? parseISO(note.createdAt) : new Date());
+        if (!isValidDateFn(eventDt)) eventDt = new Date();
+        let createdDt = note.createdAt ? parseISO(note.createdAt) : new Date();
+        if(!isValidDateFn(createdDt)) createdDt = new Date();
+        let updatedDt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
+        if(!isValidDateFn(updatedDt)) updatedDt = new Date();
+
+        return {
           ...note,
-          eventDate: note.eventDate ? parseISO(note.eventDate as string) : new Date(),
-          createdAt: note.createdAt ? parseISO(note.createdAt as string) : new Date(),
-          updatedAt: note.updatedAt ? parseISO(note.updatedAt as string) : new Date(),
-        }));
+          eventDate: eventDt,
+          createdAt: createdDt,
+          updatedAt: updatedDt,
+          // Ensure categories is an array of {id, name} objects
+          categories: Array.isArray(note.categories) 
+            ? note.categories.map((c: any) => (typeof c === 'string' ? {id: c, name: c} : (c && c.name ? c : {id: String(c), name: String(c)}))) 
+            : [],
+          tags: Array.isArray(note.tags) ? note.tags : [],
+          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : [],
+          province: note.province || "",
+        };
+      });
 
-        setNotes(fetchedNotes);
-      } catch (error) {
-        console.error("Failed to load notes from API", error);
-        toast({
-          title: "خطا",
-          description: "بارگذاری یادداشت‌ها از سرور ممکن نبود.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      setNotes(fetchedNotes as Note[]);
+    } catch (error) {
+      console.error("Failed to load notes from API", error);
+      toast({
+        title: "خطا",
+        description: "بارگذاری یادداشت‌ها از سرور ممکن نبود.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingNotes(false);
+    }
+  }, [currentUser, toast]);
 
-    const fetchCategories = async () => {
-      try {
-        // This assumes you have an API endpoint for categories
-        // const response = await fetch('/api/categories');
-        // if (!response.ok) throw new Error('Failed to fetch categories');
-        // const data: Category[] = await response.json();
-        // For now, using placeholder categories until API is fully integrated
-        // In a real app, this data would come from `prisma.category.findMany()`
-        const placeholderCategories: Category[] = [
-            // { id: "cat1", name: "عمومی" }, {id: "cat2", name: "کاری"} 
-        ]; // Will be populated by seed or API
-        // setAvailableCategories(data.sort((a,b) => a.name.localeCompare(b.name, 'fa')));
-      } catch (error) {
-        console.error("Failed to load categories from API", error);
-        // toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", variant: "destructive" });
-      }
-    };
+  const fetchAvailableCategories = useCallback(async () => {
+    // This should fetch categories from API eventually
+    // For now, it might still rely on seed or a simpler mechanism if API is not ready
+    // Or, derive from notes if API doesn't exist for categories yet.
+    try {
+      // const response = await fetch('/api/categories');
+      // if (!response.ok) throw new Error('Failed to fetch categories');
+      // const data: Category[] = await response.json();
+      // setAvailableCategories(data.sort((a,b) => a.name.localeCompare(b.name, 'fa')));
+       const placeholderCategories: Category[] = [
+            // { id: "cat1", name: "عمومی" }, {id: "cat2", name: "کاری"}
+        ]; 
+        setAvailableCategories(placeholderCategories);
 
-    fetchNotes();
-    fetchCategories();
+    } catch (error) {
+      console.error("Failed to load categories", error);
+      // toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", variant: "destructive" });
+    }
   }, [toast]);
+
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotes();
+      fetchAvailableCategories();
+    }
+  }, [currentUser, fetchNotes, fetchAvailableCategories]);
   
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedTitleSearch(titleSearch), 300);
@@ -126,18 +145,19 @@ export default function NotesPage() {
     return () => clearTimeout(handler);
   }, [phoneSearch]);
 
-  const allCategories = useMemo(() => {
-    const catSet = new Set<string>();
-    // Assuming note.categories is an array of objects { id: string, name: string }
-    notes.forEach(note => note.categories.forEach(cat => catSet.add(cat.name)));
-    return Array.from(catSet).sort((a, b) => a.localeCompare(b, 'fa'));
+  const allUniqueCategoriesFromNotes = useMemo(() => {
+    const catMap = new Map<string, Category>();
+    notes.forEach(note => note.categories.forEach(cat => {
+        if(cat && cat.id && cat.name && !catMap.has(cat.id)) {
+            catMap.set(cat.id, cat);
+        }
+    }));
+    return Array.from(catMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'fa'));
   }, [notes]);
   
-  // Or if availableCategories is populated from API:
   const displayableCategories = useMemo(() => {
-      return availableCategories.length > 0 ? availableCategories : 
-             allCategories.map(name => ({id: name, name})); // Fallback if API categories not loaded
-  }, [availableCategories, allCategories]);
+      return availableCategories.length > 0 ? availableCategories : allUniqueCategoriesFromNotes;
+  }, [availableCategories, allUniqueCategoriesFromNotes]);
 
 
   const allTags = useMemo(() => {
@@ -154,11 +174,11 @@ export default function NotesPage() {
     return Array.from(provinceSet).sort((a, b) => a.localeCompare(b, 'fa'));
   }, [notes]);
 
-  const toggleCategoryFilter = (categoryName: string) => {
+  const toggleCategoryFilter = (categoryId: string) => {
     setSelectedCategories(prev =>
-      prev.includes(categoryName)
-        ? prev.filter(cName => cName !== categoryName)
-        : [...prev, categoryName]
+      prev.includes(categoryId)
+        ? prev.filter(cId => cId !== categoryId)
+        : [...prev, categoryId]
     );
   };
 
@@ -191,12 +211,15 @@ export default function NotesPage() {
   };
 
   const handleSaveNote = async (data: NoteFormData) => {
-    // TODO: Get actual authorId from AuthContext
+    if (!currentUser) {
+        toast({ title: "خطا", description: "برای ذخیره یادداشت باید وارد شوید.", variant: "destructive"});
+        return;
+    }
     const payload = { 
         ...data, 
-        authorId: MOCK_USER_ID, // Replace with actual user ID from session
-        categoryIds: data.categoryIds, // Ensure categoryIds are passed if using them
-        eventDate: data.eventDate.toISOString(), // Send date as ISO string
+        authorId: currentUser.id,
+        eventDate: data.eventDate.toISOString(),
+        // categoryIds should already be in data from NoteForm
     };
 
     try {
@@ -204,30 +227,25 @@ export default function NotesPage() {
       let savedNoteData;
 
       if (editingNote) {
-        // response = await fetch(`/api/notes/${editingNote.id}`, {
-        //   method: 'PUT',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify(payload),
-        // });
-        // For now, use POST to create/update, or implement PUT
+        // TODO: Implement PUT /api/notes/:id
         console.warn("Update (PUT) not fully implemented yet, using optimistic update for now.");
          setNotes(
             notes.map((note) =>
             note.id === editingNote.id
                 ? { 
                     ...note, 
-                    ...data, 
+                    ...data,
+                    eventDate: data.eventDate, 
                     updatedAt: new Date(),
-                    // Simulate category objects if data.categories are names/ids
-                    categories: data.categories.map(catNameOrId => {
-                        const foundCat = availableCategories.find(ac => ac.id === catNameOrId || ac.name === catNameOrId);
-                        return foundCat || { id: catNameOrId, name: catNameOrId };
+                    categories: data.categoryIds.map(id => {
+                        const foundCat = displayableCategories.find(ac => ac.id === id);
+                        return foundCat || { id: id, name: id };
                     })
                 }
                 : note
             )
         );
-        savedNoteData = { ...editingNote, ...data, updatedAt: new Date().toISOString() };
+        savedNoteData = { ...editingNote, ...data, eventDate: data.eventDate.toISOString(), updatedAt: new Date().toISOString() };
 
       } else {
         response = await fetch('/api/notes', {
@@ -237,18 +255,17 @@ export default function NotesPage() {
         });
          if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to save note');
+            throw new Error(errorData.error || errorData.details || 'Failed to save note');
         }
         savedNoteData = await response.json();
       }
 
-     
-      // Normalize date from API response
       const finalNote: Note = {
         ...savedNoteData,
         eventDate: parseISO(savedNoteData.eventDate as string),
         createdAt: parseISO(savedNoteData.createdAt as string),
         updatedAt: parseISO(savedNoteData.updatedAt as string),
+        categories: savedNoteData.categories || [], // Ensure categories is an array
       };
 
       if (editingNote) {
@@ -283,10 +300,7 @@ export default function NotesPage() {
       setDeleteConfirmationStep(2);
     } else if (deleteConfirmationStep === 2 && noteToDeleteId) {
       try {
-        // const response = await fetch(`/api/notes/${noteToDeleteId}`, { method: 'DELETE' });
-        // if (!response.ok) {
-        //   throw new Error('Failed to delete note');
-        // }
+        // TODO: Implement DELETE /api/notes/:id
         console.warn("Delete (DELETE) not fully implemented yet, using optimistic update.");
         setNotes(notes.filter((note) => note.id !== noteToDeleteId));
         toast({ title: "یادداشت (به صورت محلی) حذف شد" });
@@ -309,30 +323,13 @@ export default function NotesPage() {
     if (!noteToUpdate) return;
 
     const newArchivedState = !noteToUpdate.isArchived;
-    // Optimistic update
+    // TODO: Call API to update archive status
     setNotes(prevNotes =>
       prevNotes.map(note =>
         note.id === noteId ? { ...note, isArchived: newArchivedState, updatedAt: new Date() } : note
       )
     );
-    try {
-    //   const response = await fetch(`/api/notes/${noteId}/archive`, { // Example endpoint
-    //     method: 'PATCH', // or PUT
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ isArchived: newArchivedState }),
-    //   });
-    //   if (!response.ok) throw new Error('Failed to update archive status');
-      toast({ title: `یادداشت (محلی) ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
-    } catch (error) {
-      console.error("Failed to toggle archive:", error);
-      toast({ title: "خطا در تغییر وضعیت آرشیو", variant: "destructive" });
-      // Revert optimistic update
-      setNotes(prevNotes =>
-        prevNotes.map(note =>
-          note.id === noteId ? { ...note, isArchived: !newArchivedState, updatedAt: new Date(noteToUpdate.updatedAt) } : note
-        )
-      );
-    }
+    toast({ title: `یادداشت (محلی) ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
   };
 
   const handleTogglePublish = async (noteId: string) => {
@@ -340,30 +337,13 @@ export default function NotesPage() {
     if (!noteToUpdate) return;
     
     const newPublishedState = !noteToUpdate.isPublished;
-    // Optimistic update
+     // TODO: Call API to update publish status
     setNotes(prevNotes =>
       prevNotes.map(note =>
         note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
       )
     );
-    try {
-    //   const response = await fetch(`/api/notes/${noteId}/publish`, { // Example endpoint
-    //      method: 'PATCH',
-    //      headers: { 'Content-Type': 'application/json' },
-    //      body: JSON.stringify({ isPublished: newPublishedState }),
-    //   });
-    //   if (!response.ok) throw new Error('Failed to update publish status');
-      toast({ title: `وضعیت انتشار یادداشت (محلی) ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
-    } catch (error) {
-      console.error("Failed to toggle publish:", error);
-      toast({ title: "خطا در تغییر وضعیت انتشار", variant: "destructive" });
-      // Revert optimistic update
-      setNotes(prevNotes =>
-        prevNotes.map(note =>
-          note.id === noteId ? { ...note, isPublished: !newPublishedState, updatedAt: new Date(noteToUpdate.updatedAt) } : note
-        )
-      );
-    }
+    toast({ title: `وضعیت انتشار یادداشت (محلی) ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
   };
 
 
@@ -385,14 +365,14 @@ export default function NotesPage() {
       const endDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
       
       tempNotes = tempNotes.filter(note => {
-        const noteEventDate = new Date(note.eventDate);
-        return noteEventDate >= startDate && noteEventDate <= endDate;
+        const noteEventDate = new Date(note.eventDate); // Already a Date object
+        return isValidDateFn(noteEventDate) && noteEventDate >= startDate && noteEventDate <= endDate;
       });
     }
 
     if (selectedCategories.length > 0) {
       tempNotes = tempNotes.filter(note =>
-        selectedCategories.every(scName => note.categories.some(cat => cat.name === scName))
+        selectedCategories.every(scId => note.categories.some(cat => cat.id === scId))
       );
     }
 
@@ -418,7 +398,14 @@ export default function NotesPage() {
       tempNotes = tempNotes.filter(note => !note.isPublished);
     }
 
-    return tempNotes.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
+    return tempNotes.sort((a, b) => {
+        const dateA = new Date(a.eventDate);
+        const dateB = new Date(b.eventDate);
+        if (!isValidDateFn(dateA) && !isValidDateFn(dateB)) return 0;
+        if (!isValidDateFn(dateA)) return 1; // put invalid dates at the end
+        if (!isValidDateFn(dateB)) return -1; // put invalid dates at the end
+        return dateB.getTime() - dateA.getTime();
+    });
   }, [
       notes, 
       debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch, 
@@ -438,14 +425,26 @@ export default function NotesPage() {
     (phoneSearch ? 1 : 0) +
     (dateRange?.from ? 1 : 0);
 
-  if (isLoading) {
+  if (isAuthLoading || (isLoadingNotes && !notes.length)) {
     return (
-      <div className="container mx-auto p-4 md:p-8 text-center">
-        <p>در حال بارگذاری یادداشت‌ها از سرور...</p>
-        {/* Add a spinner or skeleton loader here */}
+      <div className="container mx-auto p-4 md:p-8 text-center flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <p className="text-lg text-foreground">در حال بارگذاری یادداشت‌ها...</p>
       </div>
     );
   }
+  
+  if (!currentUser && !isAuthLoading) {
+      return (
+        <div className="container mx-auto p-4 md:p-8 text-center">
+            <p className="text-lg text-destructive">برای مشاهده یادداشت‌ها ابتدا باید وارد شوید.</p>
+            <Button asChild className="mt-4">
+                <Link href="/login">رفتن به صفحه ورود</Link>
+            </Button>
+        </div>
+      )
+  }
+
 
   return (
     <>
@@ -522,6 +521,7 @@ export default function NotesPage() {
                             onSelect={setDateRange}
                             numberOfMonths={2}
                             locale={faIR}
+                            required
                         />
                         </PopoverContent>
                     </Popover>
@@ -566,12 +566,12 @@ export default function NotesPage() {
                         {displayableCategories.map(category => (
                           <Badge
                             key={category.id}
-                            variant={selectedCategories.includes(category.name) ? "default" : "secondary"}
-                            onClick={() => toggleCategoryFilter(category.name)}
+                            variant={selectedCategories.includes(category.id) ? "default" : "secondary"}
+                            onClick={() => toggleCategoryFilter(category.id)} // Use category.id for filtering
                             className="cursor-pointer py-1.5 px-3 text-xs transition-all hover:opacity-80"
                             role="button"
                             tabIndex={0}
-                            onKeyDown={(e) => e.key === 'Enter' && toggleCategoryFilter(category.name)}
+                            onKeyDown={(e) => e.key === 'Enter' && toggleCategoryFilter(category.id)}
                           >
                             {category.name}
                           </Badge>
@@ -701,7 +701,7 @@ export default function NotesPage() {
                 <p className="text-xl font-semibold mb-2 font-headline">
                   {activeFilterCount > 0
                     ? "یادداشتی با این مشخصات یافت نشد"
-                    : "هنوز یادداشتی وجود ندارد"}
+                    : "هنوز یادداشتی ایجاد نشده است"}
                 </p>
                 <p className="text-md">
                   {activeFilterCount > 0
@@ -721,8 +721,7 @@ export default function NotesPage() {
           }}
           onSubmit={handleSaveNote}
           initialData={editingNote || undefined}
-          // Pass availableCategories from API to NoteForm
-          // availableCategories={availableCategoriesFromApi} 
+          availableCategories={displayableCategories} 
         />
 
         <ConfirmDialog
