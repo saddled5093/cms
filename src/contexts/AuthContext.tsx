@@ -38,16 +38,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         body: JSON.stringify({ username, password: password_raw }),
       });
       
-      const data = await response.json();
+      const responseText = await response.text();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        let errorMessage = `Login failed with status: ${response.status}`;
+        try {
+          // Try to parse the response text as JSON if it's an error
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          // If parsing fails, the responseText itself might be the error (e.g., HTML)
+          // For development, you might want to log responseText, but avoid showing it directly to the user in production.
+          console.error("Non-JSON error response from /api/auth/login. Status:", response.status, "Body:", responseText);
+        }
+        throw new Error(errorMessage);
       }
+      
+      // If response.ok is true, we expect valid JSON
+      const data = JSON.parse(responseText); 
       
       const loggedInUser = data.user as User;
       setCurrentUser(loggedInUser);
       localStorage.setItem('noterAppUser', JSON.stringify(loggedInUser));
-      router.push('/'); // Redirect to dashboard after login
+      router.push('/'); 
       return true;
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred during login.');
@@ -105,3 +118,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
