@@ -11,7 +11,7 @@ export default function Header({ onNewNoteClick }: HeaderProps) {
       <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
         <Link href="/" className="flex items-center space-x-2">
           <AppLogo className="h-6 w-6 text-primary" />
-          <span className="font-headline text-2xl font-bold text-primary">NoteVault</span>
+          <span className="font-headline text-2xl font-bold text-primary">یادداشت‌گاه</span>
         </Link>
         {/* "New Note" button moved to page.tsx for better state management access */}
       </div>

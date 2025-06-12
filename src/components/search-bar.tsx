@@ -17,14 +17,14 @@ export default function SearchBar({ searchTerm, onSearchChange, className }: Sea
 
   return (
     <div className={`relative ${className}`}>
-      <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+      <SearchIcon className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" /> {/* Changed left-3 to right-3 for RTL */}
       <Input
         type="search"
-        placeholder="Search notes by title or content..."
+        placeholder="جستجوی یادداشت‌ها بر اساس عنوان یا محتوا..."
         value={searchTerm}
         onChange={handleChange}
-        className="w-full rounded-lg bg-background pl-10 pr-4 py-2 shadow-sm focus:ring-2 focus:ring-primary/50"
-        aria-label="Search notes"
+        className="w-full rounded-lg bg-background pr-10 pl-4 py-2 shadow-sm focus:ring-2 focus:ring-primary/50" /* Changed pl-10 pr-4 to pr-10 pl-4 for RTL */
+        aria-label="جستجوی یادداشت‌ها"
       />
     </div>
   );

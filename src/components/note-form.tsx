@@ -26,8 +26,8 @@ import type { Note } from "@/types";
 import { useEffect } from "react";
 
 const noteFormSchema = z.object({
-  title: z.string().min(1, "Title is required").max(100, "Title must be 100 characters or less"),
-  content: z.string().min(1, "Content is required"),
+  title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
+  content: z.string().min(1, "محتوا الزامی است"),
 });
 
 type NoteFormData = z.infer<typeof noteFormSchema>;
@@ -36,7 +36,7 @@ interface NoteFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: NoteFormData) => void;
-  initialData?: Partial<Note>; // Making initialData partial and more flexible
+  initialData?: Partial<Note>;
 }
 
 export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: NoteFormProps) {
@@ -57,11 +57,11 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     } else {
       form.reset({ title: "", content: "" });
     }
-  }, [initialData, form, isOpen]); // Reset form when initialData changes or dialog opens
+  }, [initialData, form, isOpen]);
 
   const handleFormSubmit = (data: NoteFormData) => {
     onSubmit(data);
-    form.reset(); // Reset form after successful submission
+    form.reset();
   };
 
   return (
@@ -69,7 +69,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       <DialogContent className="sm:max-w-[525px] bg-card text-card-foreground rounded-lg shadow-xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl">
-            {initialData?.id ? "Edit Note" : "Create New Note"}
+            {initialData?.id ? "ویرایش یادداشت" : "ایجاد یادداشت جدید"}
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
@@ -79,9 +79,9 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-foreground">Title</FormLabel>
+                  <FormLabel className="text-foreground">عنوان</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter note title" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                    <Input placeholder="عنوان یادداشت را وارد کنید" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -92,10 +92,10 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
               name="content"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-foreground">Content</FormLabel>
+                  <FormLabel className="text-foreground">محتوا</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Write your note here..."
+                      placeholder="یادداشت خود را اینجا بنویسید..."
                       className="min-h-[150px] bg-input text-foreground placeholder:text-muted-foreground"
                       {...field}
                     />
@@ -107,11 +107,11 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
             <DialogFooter className="sm:justify-end gap-2 pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={onClose}>
-                  Cancel
+                  انصراف
                 </Button>
               </DialogClose>
               <Button type="submit" variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                Save Note
+                ذخیره یادداشت
               </Button>
             </DialogFooter>
           </form>

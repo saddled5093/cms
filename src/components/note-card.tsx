@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import type { Note } from "@/types";
 import { Edit3, Trash2 } from "lucide-react";
 import { format } from 'date-fns';
+import { faIR } from 'date-fns/locale/fa-IR';
 
 interface NoteCardProps {
   note: Note;
@@ -23,7 +24,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
       <CardHeader className="pb-2">
         <CardTitle className="font-headline text-xl text-primary">{note.title}</CardTitle>
         <CardDescription className="text-xs text-muted-foreground pt-1">
-          Last updated: {format(new Date(note.updatedAt), "PPpp")}
+          آخرین بروزرسانی: {format(new Date(note.updatedAt), "PPpp", { locale: faIR })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow pb-4">
@@ -32,10 +33,10 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
         </p>
       </CardContent>
       <CardFooter className="flex justify-end gap-2 pt-2 border-t border-border/60">
-        <Button variant="ghost" size="icon" onClick={() => onEdit(note)} aria-label="Edit note">
+        <Button variant="ghost" size="icon" onClick={() => onEdit(note)} aria-label="ویرایش یادداشت">
           <Edit3 className="h-5 w-5 text-accent hover:text-accent/80" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => onDelete(note.id)} aria-label="Delete note">
+        <Button variant="ghost" size="icon" onClick={() => onDelete(note.id)} aria-label="حذف یادداشت">
           <Trash2 className="h-5 w-5 text-destructive hover:text-destructive/80" />
         </Button>
       </CardFooter>

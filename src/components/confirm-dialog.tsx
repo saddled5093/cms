@@ -36,9 +36,9 @@ export default function ConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onClose} className="hover:bg-muted">Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onClose} className="hover:bg-muted">انصراف</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-            Confirm
+            تایید
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
