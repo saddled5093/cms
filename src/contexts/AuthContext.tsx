@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { User } from '@prisma/client'; // Assuming User type from Prisma
+import { UserRole } from '@prisma/client'; // Import UserRole
 
 interface AuthContextType {
   currentUser: User | null;
@@ -43,29 +44,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!response.ok) {
         let errorMessage = `Login failed with status: ${response.status}`;
         try {
-          // Try to parse the response text as JSON if it's an error
           const errorData = JSON.parse(responseText);
           errorMessage = errorData.error || errorMessage;
         } catch (parseError) {
-          // If parsing fails, the responseText itself might be the error (e.g., HTML)
-          // For development, you might want to log responseText, but avoid showing it directly to the user in production.
           console.error("Non-JSON error response from /api/auth/login. Status:", response.status, "Body:", responseText);
         }
         throw new Error(errorMessage);
       }
       
-      // If response.ok is true, we expect valid JSON
       const data = JSON.parse(responseText); 
       
       const loggedInUser = data.user as User;
       setCurrentUser(loggedInUser);
-      localStorage.setItem('noterAppUser', JSON.stringify(loggedInUser));
+      // localStorage.setItem('noterAppUser', JSON.stringify(loggedInUser)); // Not using localStorage for temporary admin
       router.push('/'); 
       return true;
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred during login.');
       setCurrentUser(null);
-      localStorage.removeItem('noterAppUser');
+      // localStorage.removeItem('noterAppUser'); // Not using localStorage for temporary admin
       return false;
     } finally {
       setIsLoading(false);
@@ -73,32 +70,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [router]);
 
   const logout = useCallback(() => {
-    setCurrentUser(null);
-    localStorage.removeItem('noterAppUser');
-    router.push('/login');
+    // For temporary admin mode, logout can simply redirect or set user to null
+    // It won't truly log out a persisted session if we always default to admin on load.
+    setCurrentUser(null); 
+    // localStorage.removeItem('noterAppUser'); // Not using localStorage for temporary admin
+    router.push('/login'); // Still redirect to login, though next load will be admin again
   }, [router]);
 
   useEffect(() => {
     setIsLoading(true);
-    try {
-      const storedUser = localStorage.getItem('noterAppUser');
-      if (storedUser) {
-        const user = JSON.parse(storedUser) as User;
-        setCurrentUser(user);
-      }
-    } catch (e) {
-      // Invalid JSON or other error, ensure user is logged out
-      console.error("Failed to load user from localStorage", e);
-      setCurrentUser(null);
-      localStorage.removeItem('noterAppUser');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    // Temporarily default to admin user
+    const defaultAdminUser: User = {
+      id: 'default-admin-id', // Placeholder ID
+      username: 'admin',
+      role: UserRole.ADMIN,
+      password: '', // Password hash is not stored/used on client
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setCurrentUser(defaultAdminUser);
+    setIsLoading(false);
+  }, []); // Empty dependency array means this runs once on mount
 
-  // Effect to handle redirection based on auth state
+  // Effect to handle redirection based on auth state (won't redirect to login if admin is defaulted)
   useEffect(() => {
     if (!isLoading && !currentUser && pathname !== '/login') {
+      // This condition will likely not be met due to default admin user
       router.push('/login');
     }
   }, [isLoading, currentUser, pathname, router]);
@@ -118,4 +115,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
