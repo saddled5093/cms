@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Note } from "@/types";
-import { Edit3, Trash2, Folder, Tag, MapPin, Phone } from "lucide-react";
+import { Edit3, Trash2, Folder, Tag, MapPin, Phone, Archive, ArchiveRestore, Eye, EyeOff, FileText } from "lucide-react";
 import { format } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 
@@ -13,10 +13,12 @@ interface NoteCardProps {
   note: Note;
   onEdit: (note: Note) => void;
   onDelete: (noteId: string) => void;
+  onToggleArchive: (noteId: string) => void;
+  onTogglePublish: (noteId: string) => void;
 }
 
-export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
-  const MAX_CONTENT_PREVIEW_LENGTH = 80; // Adjusted for new elements
+export default function NoteCard({ note, onEdit, onDelete, onToggleArchive, onTogglePublish }: NoteCardProps) {
+  const MAX_CONTENT_PREVIEW_LENGTH = 80; 
   const displayContent = note.content.length > MAX_CONTENT_PREVIEW_LENGTH 
     ? `${note.content.substring(0, MAX_CONTENT_PREVIEW_LENGTH)}...`
     : note.content;
@@ -24,12 +26,18 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
   return (
     <Card className="flex flex-col h-full overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 bg-card text-card-foreground">
       <CardHeader className="pb-2">
-        <CardTitle className="font-headline text-xl text-primary">{note.title}</CardTitle>
+        <div className="flex justify-between items-start">
+          <CardTitle className="font-headline text-xl text-primary">{note.title}</CardTitle>
+          <div className="flex gap-1.5">
+            {note.isArchived && <Badge variant="secondary" className="text-xs bg-muted/50 text-muted-foreground">آرشیو شده</Badge>}
+            {note.isPublished && <Badge variant="default" className="text-xs bg-accent/80 text-accent-foreground">منتشر شده</Badge>}
+          </div>
+        </div>
         <CardDescription className="text-xs text-muted-foreground pt-1">
           آخرین بروزرسانی: {format(new Date(note.updatedAt), "PPpp", { locale: faIR })}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow pb-4 space-y-2.5"> {/* Adjusted spacing */}
+      <CardContent className="flex-grow pb-4 space-y-2.5">
         <p className="text-sm font-body whitespace-pre-wrap break-words">
           {displayContent}
         </p>
@@ -63,6 +71,12 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
         )}
       </CardContent>
       <CardFooter className="flex justify-end gap-2 pt-2 border-t border-border/60">
+        <Button variant="ghost" size="icon" onClick={() => onToggleArchive(note.id)} aria-label={note.isArchived ? "بازیابی یادداشت" : "آرشیو یادداشت"}>
+          {note.isArchived ? <ArchiveRestore className="h-5 w-5 text-muted-foreground hover:text-foreground" /> : <Archive className="h-5 w-5 text-muted-foreground hover:text-foreground" />}
+        </Button>
+        <Button variant="ghost" size="icon" onClick={() => onTogglePublish(note.id)} aria-label={note.isPublished ? "لغو انتشار یادداشت" : "انتشار یادداشت"}>
+          {note.isPublished ? <EyeOff className="h-5 w-5 text-muted-foreground hover:text-foreground" /> : <Eye className="h-5 w-5 text-muted-foreground hover:text-foreground" />}
+        </Button>
         <Button variant="ghost" size="icon" onClick={() => onEdit(note)} aria-label="ویرایش یادداشت">
           <Edit3 className="h-5 w-5 text-accent hover:text-accent/80" />
         </Button>
@@ -73,3 +87,4 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
     </Card>
   );
 }
+

@@ -16,6 +16,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -30,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import type { Note } from "@/types";
 import { useEffect } from "react";
 
@@ -49,6 +51,8 @@ const noteFormSchema = z.object({
   tags: z.string().optional(), // Comma-separated string
   province: z.string().min(1, "انتخاب استان الزامی است"),
   phoneNumbers: z.string().optional(), // Comma-separated string for phone numbers
+  isArchived: z.boolean().optional(),
+  isPublished: z.boolean().optional(),
 });
 
 export type NoteFormData = {
@@ -58,6 +62,8 @@ export type NoteFormData = {
   tags: string[];
   province: string;
   phoneNumbers: string[];
+  isArchived: boolean;
+  isPublished: boolean;
 };
 
 // Internal form data type
@@ -80,6 +86,8 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       tags: "",
       province: "",
       phoneNumbers: "",
+      isArchived: false,
+      isPublished: false,
     },
   });
 
@@ -93,9 +101,11 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
           tags: initialData.tags?.join(", ") || "",
           province: initialData.province || "",
           phoneNumbers: initialData.phoneNumbers?.join(", ") || "",
+          isArchived: initialData.isArchived || false,
+          isPublished: initialData.isPublished || false,
         });
       } else {
-        form.reset({ title: "", content: "", categories: "", tags: "", province: "", phoneNumbers: "" });
+        form.reset({ title: "", content: "", categories: "", tags: "", province: "", phoneNumbers: "", isArchived: false, isPublished: false });
       }
     }
   }, [initialData, form, isOpen]);
@@ -118,6 +128,8 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
       tags: tagsArray,
       province: data.province,
       phoneNumbers: phoneNumbersArray,
+      isArchived: data.isArchived || false,
+      isPublished: data.isPublished || false,
     });
     form.reset();
   };
@@ -159,7 +171,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                   <FormControl>
                     <Textarea
                       placeholder="یادداشت خود را اینجا بنویسید..."
-                      className="min-h-[120px] bg-input text-foreground placeholder:text-muted-foreground" // Reduced height a bit
+                      className="min-h-[120px] bg-input text-foreground placeholder:text-muted-foreground"
                       {...field}
                     />
                   </FormControl>
@@ -173,7 +185,7 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-foreground">استان</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
                     <FormControl>
                       <SelectTrigger className="bg-input text-foreground placeholder:text-muted-foreground">
                         <SelectValue placeholder="یک استان انتخاب کنید" />
@@ -230,6 +242,46 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                 </FormItem>
               )}
             />
+             <FormField
+              control={form.control}
+              name="isArchived"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-input">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-foreground">آرشیو کردن</FormLabel>
+                    <FormDescription className="text-muted-foreground text-xs">
+                      یادداشت را به آرشیو منتقل کن.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="isPublished"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-input">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-foreground">انتشار عمومی</FormLabel>
+                    <FormDescription className="text-muted-foreground text-xs">
+                      این یادداشت برای نمایش عمومی منتشر شود.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
             <DialogFooter className="sm:justify-end gap-2 pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); }}>
@@ -246,3 +298,4 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
     </Dialog>
   );
 }
+

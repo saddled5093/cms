@@ -10,7 +10,7 @@ import SearchBar from "@/components/search-bar";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX } from "lucide-react";
+import { FilePlus, ServerCrash, FilterX, ArchiveIcon, EyeIcon } from "lucide-react";
 import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,8 @@ export default function HomePage() {
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+
 
   const { toast } = useToast();
 
@@ -38,8 +40,10 @@ export default function HomePage() {
           ...note,
           categories: note.categories || [],
           tags: note.tags || [],
-          province: note.province || "", // Handle potentially missing province
-          phoneNumbers: note.phoneNumbers || [], // Handle potentially missing phoneNumbers
+          province: note.province || "", 
+          phoneNumbers: note.phoneNumbers || [],
+          isArchived: typeof note.isArchived === 'boolean' ? note.isArchived : false,
+          isPublished: typeof note.isPublished === 'boolean' ? note.isPublished : false,
           createdAt: new Date(note.createdAt),
           updatedAt: new Date(note.updatedAt),
         })));
@@ -81,6 +85,14 @@ export default function HomePage() {
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'fa'));
   }, [notes]);
 
+  const allProvinces = useMemo(() => {
+    const provinceSet = new Set<string>();
+    notes.forEach(note => {
+      if (note.province) provinceSet.add(note.province);
+    });
+    return Array.from(provinceSet).sort((a, b) => a.localeCompare(b, 'fa'));
+  }, [notes]);
+
   const toggleCategoryFilter = (category: string) => {
     setSelectedCategories(prev =>
       prev.includes(category)
@@ -96,10 +108,19 @@ export default function HomePage() {
         : [...prev, tag]
     );
   };
+  
+  const toggleProvinceFilter = (province: string) => {
+    setSelectedProvinces(prev =>
+      prev.includes(province)
+        ? prev.filter(p => p !== province)
+        : [...prev, province]
+    );
+  };
 
   const clearFilters = () => {
     setSelectedCategories([]);
     setSelectedTags([]);
+    setSelectedProvinces([]);
     setSearchTerm("");
   };
 
@@ -110,7 +131,7 @@ export default function HomePage() {
           note.id === editingNote.id
             ? { 
                 ...note, 
-                ...data, // includes title, content, categories, tags, province, phoneNumbers
+                ...data, 
                 updatedAt: new Date() 
               }
             : note
@@ -126,6 +147,8 @@ export default function HomePage() {
         tags: data.tags,
         province: data.province,
         phoneNumbers: data.phoneNumbers,
+        isArchived: data.isArchived,
+        isPublished: data.isPublished,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -152,6 +175,33 @@ export default function HomePage() {
     }
     setNoteToDeleteId(null);
   };
+
+  const handleToggleArchive = (noteId: string) => {
+    const noteToUpdate = notes.find(n => n.id === noteId);
+    if (!noteToUpdate) return;
+
+    const newArchivedState = !noteToUpdate.isArchived;
+    setNotes(prevNotes =>
+      prevNotes.map(note =>
+        note.id === noteId ? { ...note, isArchived: newArchivedState, updatedAt: new Date() } : note
+      )
+    );
+    toast({ title: `یادداشت ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
+  };
+
+  const handleTogglePublish = (noteId: string) => {
+    const noteToUpdate = notes.find(n => n.id === noteId);
+    if (!noteToUpdate) return;
+    
+    const newPublishedState = !noteToUpdate.isPublished;
+    setNotes(prevNotes =>
+      prevNotes.map(note =>
+        note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
+      )
+    );
+    toast({ title: `وضعیت انتشار یادداشت ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
+  };
+
 
   const filteredNotes = useMemo(() => {
     let tempNotes = notes;
@@ -180,11 +230,20 @@ export default function HomePage() {
         selectedTags.every(st => note.tags.includes(st))
       );
     }
-    // Sort notes by updatedAt in descending order (newest first)
+    
+    if (selectedProvinces.length > 0) {
+      tempNotes = tempNotes.filter(note => selectedProvinces.includes(note.province));
+    }
+
+    // By default, filter out archived notes unless a filter is specifically applied that would include them
+    // For now, let's show all notes and user can filter later if they want.
+    // tempNotes = tempNotes.filter(note => !note.isArchived);
+
+
     return tempNotes.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  }, [notes, debouncedSearchTerm, selectedCategories, selectedTags]);
+  }, [notes, debouncedSearchTerm, selectedCategories, selectedTags, selectedProvinces]);
   
-  const activeFilterCount = selectedCategories.length + selectedTags.length + (searchTerm ? 1 : 0);
+  const activeFilterCount = selectedCategories.length + selectedTags.length + selectedProvinces.length + (searchTerm ? 1 : 0);
 
 
   return (
@@ -207,7 +266,6 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-x-8 gap-y-6 mt-8">
-          {/* Filter Panel */}
           <aside className="lg:w-64 xl:w-72 lg:sticky lg:top-24 h-fit lg:max-h-[calc(100vh-8rem)]">
             <Card className="shadow-lg rounded-lg">
               <CardHeader className="pb-4">
@@ -222,7 +280,7 @@ export default function HomePage() {
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">دسته‌بندی‌ها</h3>
                   {allCategories.length > 0 ? (
-                    <ScrollArea className="h-36 pr-3">
+                    <ScrollArea className="h-32 pr-3">
                       <div className="flex flex-wrap gap-2">
                         {allCategories.map(category => (
                           <Badge
@@ -247,7 +305,7 @@ export default function HomePage() {
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">تگ‌ها</h3>
                   {allTags.length > 0 ? (
-                    <ScrollArea className="h-36 pr-3">
+                    <ScrollArea className="h-32 pr-3">
                       <div className="flex flex-wrap gap-2">
                         {allTags.map(tag => (
                           <Badge
@@ -268,6 +326,31 @@ export default function HomePage() {
                     <p className="text-sm text-muted-foreground">تگی وجود ندارد.</p>
                   )}
                 </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2.5 text-md text-foreground">استان‌ها</h3>
+                  {allProvinces.length > 0 ? (
+                    <ScrollArea className="h-32 pr-3">
+                      <div className="flex flex-wrap gap-2">
+                        {allProvinces.map(province => (
+                          <Badge
+                            key={province}
+                            variant={selectedProvinces.includes(province) ? "default" : "secondary"}
+                            onClick={() => toggleProvinceFilter(province)}
+                            className="cursor-pointer py-1.5 px-3 text-xs transition-all hover:opacity-80"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === 'Enter' && toggleProvinceFilter(province)}
+                          >
+                            {province}
+                          </Badge>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">استانی برای فیلتر وجود ندارد.</p>
+                  )}
+                </div>
                 
                 {activeFilterCount > 0 && (
                    <Button onClick={clearFilters} variant="outline" size="sm" className="w-full mt-3 text-muted-foreground hover:text-foreground">
@@ -279,7 +362,6 @@ export default function HomePage() {
             </Card>
           </aside>
 
-          {/* Notes Grid */}
           <main className="flex-grow min-w-0">
             {filteredNotes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -289,6 +371,8 @@ export default function HomePage() {
                     note={note}
                     onEdit={handleEditNote}
                     onDelete={handleDeleteNote}
+                    onToggleArchive={handleToggleArchive}
+                    onTogglePublish={handleTogglePublish}
                   />
                 ))}
               </div>
@@ -331,3 +415,4 @@ export default function HomePage() {
     </>
   );
 }
+

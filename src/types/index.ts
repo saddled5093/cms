@@ -9,4 +9,7 @@ export interface Note {
   phoneNumbers: string[]; // New field for multiple phone numbers
   createdAt: Date;
   updatedAt: Date;
+  isArchived: boolean;
+  isPublished: boolean;
 }
+
