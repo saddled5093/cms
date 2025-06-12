@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'; // Keep for general input if need
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, ArrowLeft, Edit3, Trash2, MessageSquare, Star, Send, CalendarDays, MapPin, Folder, Tag, Phone, Eye, EyeOff, Archive, ArchiveRestore } from 'lucide-react';
+import { Loader2, ArrowLeft, Edit3, Trash2, MessageSquare, Star, Send, CalendarDays, MapPin, Folder, Tag, Phone, Eye, EyeOff, Archive, ArchiveRestore, XCircle } from 'lucide-react';
 import { format as formatJalali } from 'date-fns-jalali';
 import { faIR } from 'date-fns-jalali/locale';
 import { parseISO, isValid as isValidDateFn } from 'date-fns';
