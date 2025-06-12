@@ -10,12 +10,19 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus, ServerCrash, FilterX, Search } from "lucide-react";
+import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIcon, XCircle } from "lucide-react";
 import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format as formatDateFn, startOfDay, endOfDay } from 'date-fns';
+import { faIR } from 'date-fns/locale/fa-IR';
+import { format as formatJalali } from 'date-fns-jalali';
+import type { DateRange } from "react-day-picker";
+
 
 const generateId = () => crypto.randomUUID();
 
@@ -28,6 +35,7 @@ export default function NotesPage() {
   const [titleSearch, setTitleSearch] = useState("");
   const [contentSearch, setContentSearch] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const [debouncedTitleSearch, setDebouncedTitleSearch] = useState("");
   const [debouncedContentSearch, setDebouncedContentSearch] = useState("");
@@ -144,6 +152,7 @@ export default function NotesPage() {
     setTitleSearch("");
     setContentSearch("");
     setPhoneSearch("");
+    setDateRange(undefined);
   };
 
   const handleSaveNote = (data: NoteFormData) => {
@@ -194,12 +203,11 @@ export default function NotesPage() {
   const confirmDeleteNote = () => {
     if (deleteConfirmationStep === 1) {
       setDeleteConfirmationStep(2);
-      // Dialog stays open for the second confirmation
     } else if (deleteConfirmationStep === 2 && noteToDeleteId) {
       setNotes(notes.filter((note) => note.id !== noteToDeleteId));
       toast({ title: "یادداشت حذف شد", description: "یادداشت حذف گردید." });
       setNoteToDeleteId(null);
-      setDeleteConfirmationStep(1); // Reset for next time
+      setDeleteConfirmationStep(1); 
     }
   };
   
@@ -247,6 +255,16 @@ export default function NotesPage() {
     if (debouncedPhoneSearch) {
       tempNotes = tempNotes.filter(note => note.phoneNumbers.some(pn => pn.includes(debouncedPhoneSearch)));
     }
+    
+    if (dateRange?.from) {
+      const startDate = startOfDay(dateRange.from);
+      const endDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+      
+      tempNotes = tempNotes.filter(note => {
+        const noteDate = new Date(note.createdAt);
+        return noteDate >= startDate && noteDate <= endDate;
+      });
+    }
 
     if (selectedCategories.length > 0) {
       tempNotes = tempNotes.filter(note =>
@@ -280,6 +298,7 @@ export default function NotesPage() {
   }, [
       notes, 
       debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch, 
+      dateRange,
       selectedCategories, selectedTags, selectedProvinces, 
       archiveFilter, publishFilter
     ]);
@@ -292,19 +311,19 @@ export default function NotesPage() {
     (publishFilter !== "all" ? 1 : 0) +
     (titleSearch ? 1 : 0) +
     (contentSearch ? 1 : 0) +
-    (phoneSearch ? 1 : 0);
+    (phoneSearch ? 1 : 0) +
+    (dateRange?.from ? 1 : 0);
 
 
   return (
     <>
-      {/* Header will be rendered by RootLayout, no onNewNoteClick prop needed from here */}
       <div className="container mx-auto p-4 md:p-8">
         <div className="mb-6 p-4 border rounded-lg shadow bg-card">
             <h2 className="text-lg font-semibold mb-3 text-primary flex items-center">
                 <Search className="ml-2 h-5 w-5"/>
-                جستجوی پیشرفته
+                جستجو و فیلتر پیشرفته
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Input
                     type="text"
                     placeholder="جستجو بر اساس عنوان..."
@@ -326,6 +345,55 @@ export default function NotesPage() {
                     onChange={(e) => setPhoneSearch(e.target.value)}
                     className="bg-input placeholder:text-muted-foreground"
                 />
+                 <div className="relative">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="date"
+                            variant={"outline"}
+                            className={`w-full justify-start text-left font-normal bg-input hover:bg-muted/30 ${
+                            !dateRange && "text-muted-foreground"
+                            }`}
+                        >
+                            <CalendarIcon className="ml-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>
+                                {formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })} -{" "}
+                                {formatJalali(dateRange.to, "LLL dd, y", { locale: faIR })}
+                                </>
+                            ) : (
+                                formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })
+                            )
+                            ) : (
+                            <span>انتخاب بازه زمانی</span>
+                            )}
+                        </Button>
+                        </PopoverTrigger>
+                        {dateRange?.from && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 z-10"
+                                onClick={() => setDateRange(undefined)}
+                                aria-label="پاک کردن بازه زمانی"
+                            >
+                                <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                            </Button>
+                        )}
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={dateRange?.from}
+                            selected={dateRange}
+                            onSelect={setDateRange}
+                            numberOfMonths={2}
+                            locale={faIR}
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
             </div>
         </div>
 
@@ -538,5 +606,4 @@ export default function NotesPage() {
     </>
   );
 }
-
     
