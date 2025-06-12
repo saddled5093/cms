@@ -1,70 +1,59 @@
 
-// datasource db defines the database connection settings.
-// It's configured for SQLite.
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db" // Path to your SQLite database file
+  url      = "file:./dev.db"
 }
 
-// generator client defines how Prisma Client is generated.
-// It's set to use Prisma Client JS.
 generator client {
   provider = "prisma-client-js"
 }
 
-// User model: Represents users in the application.
+// We removed the UserRole enum and will use String for the role field.
+// Application logic should ensure role is one of "USER" or "ADMIN".
+
 model User {
-  id        String   @id @default(cuid()) // Unique identifier for the user
-  username  String   @unique // Unique username for login
-  password  String   // Hashed password
-  role      UserRole @default(USER) // Role of the user (USER or ADMIN)
-  notes     Note[]   // Notes created by the user
-  comments  Comment[] // Comments made by the user
-  createdAt DateTime @default(now()) // Timestamp of user creation
-  updatedAt DateTime @updatedAt // Timestamp of last user update
+  id        String    @id @default(cuid())
+  username  String    @unique
+  password  String
+  role      String // Changed from UserRole to String. Expected values: "USER", "ADMIN"
+  notes     Note[]
+  comments  Comment[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-// Note model: Represents individual notes.
 model Note {
-  id            String     @id @default(cuid()) // Unique identifier for the note
-  title         String     // Title of the note
-  content       String     // Main content of the note
-  categories    Category[] @relation("NoteToCategory") // Categories the note belongs to
-  tags          String?    // Tags associated with the note, stored as a JSON string
-  province      String     // Province related to the note
-  phoneNumbers  String?    // Phone numbers related to the note, stored as a JSON string
-  eventDate     DateTime   // Date of the event the note is about
-  createdAt     DateTime   @default(now()) // Timestamp of note creation
-  updatedAt     DateTime   @updatedAt // Timestamp of last note update
-  isArchived    Boolean    @default(false) // Whether the note is archived
-  isPublished   Boolean    @default(false) // Whether the note is publicly published
-  rating        Int?       @default(0) // Rating given by an admin (e.g., 0-5)
-  comments      Comment[]  // Comments on this note
-  author        User       @relation(fields: [authorId], references: [id]) // The user who created the note
-  authorId      String     // Foreign key for the author
+  id            String     @id @default(cuid())
+  title         String
+  content       String
+  author        User       @relation(fields: [authorId], references: [id])
+  authorId      String
+  categories    Category[] @relation("NoteToCategory")
+  tags          String? // Stored as JSON string: "[\"tag1\", \"tag2\"]" or null
+  province      String
+  phoneNumbers  String? // Stored as JSON string: "[\"num1\", \"num2\"]" or null
+  eventDate     DateTime
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  isArchived    Boolean    @default(false)
+  isPublished   Boolean    @default(false)
+  rating        Int?       @default(0) // Rating from 0 to 5
+  comments      Comment[]
 }
 
-// Category model: Represents categories for notes.
 model Category {
-  id    String @id @default(cuid()) // Unique identifier for the category
-  name  String @unique // Name of the category
-  notes Note[] @relation("NoteToCategory") // Notes belonging to this category
+  id    String @id @default(cuid())
+  name  String @unique
+  notes Note[] @relation("NoteToCategory")
 }
 
-// Comment model: Represents comments on notes.
 model Comment {
-  id        String   @id @default(cuid()) // Unique identifier for the comment
-  content   String   // Content of the comment
-  createdAt DateTime @default(now()) // Timestamp of comment creation
-  updatedAt DateTime @updatedAt // Timestamp of last comment update
-  author    User     @relation(fields: [authorId], references: [id]) // The user who wrote the comment
-  authorId  String   // Foreign key for the author
-  note      Note     @relation(fields: [noteId], references: [id]) // The note this comment belongs to
-  noteId    String   // Foreign key for the note
-}
-
-// Enum for UserRole: Defines possible roles for a user.
-enum UserRole {
-  USER
-  ADMIN
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  note      Note     @relation(fields: [noteId], references: [id])
+  noteId    String
 }

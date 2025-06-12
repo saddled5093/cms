@@ -1,5 +1,5 @@
 
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/lib/authUtils';
 
 const prisma = new PrismaClient();
@@ -16,7 +16,7 @@ async function main() {
     create: {
       username: 'admin',
       password: adminPassword,
-      role: UserRole.ADMIN,
+      role: "ADMIN", // Changed to string literal
     },
   });
   console.log(`Created admin user: ${admin.username}`);
@@ -29,7 +29,7 @@ async function main() {
       create: {
         username,
         password: userPassword,
-        role: UserRole.USER,
+        role: "USER", // Changed to string literal
       },
     });
     console.log(`Created user: ${user.username}`);

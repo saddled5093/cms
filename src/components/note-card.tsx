@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { UserRole } from '@prisma/client';
+// UserRole enum is not imported anymore, comparisons will be string-based
 
 interface NoteCardProps {
   note: Note;
@@ -74,7 +74,7 @@ export default function NoteCard({ note, onEdit, onDelete, onToggleArchive, onTo
       toast({ title: "خطا", description: "امتیاز باید بین ۰ و ۵ باشد.", variant: "destructive"});
       return;
     }
-    if (currentUser?.role === UserRole.ADMIN) {
+    if (currentUser?.role === "ADMIN") { // Changed to string comparison
       try {
         await onRatingChange(note.id, ratingValue);
         setCurrentRating(ratingValue); // Optimistic update
@@ -181,7 +181,7 @@ export default function NoteCard({ note, onEdit, onDelete, onToggleArchive, onTo
       </div>
 
       {/* Admin Rating Section */}
-      {currentUser?.role === UserRole.ADMIN && (
+      {currentUser?.role === "ADMIN" && ( // Changed to string comparison
         <div className="mt-3 pt-3 border-t border-border/40">
           <label htmlFor={`rating-${note.id}`} className="block text-sm font-medium text-foreground mb-1">امتیاز مدیر (۰-۵):</label>
           <div className="flex items-center gap-2">

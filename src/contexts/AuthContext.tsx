@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { User } from '@prisma/client'; // Assuming User type from Prisma
-import { type UserRole } from '@prisma/client'; // Import UserRole type
+// UserRole enum is no longer directly imported as it's represented by string in schema for SQLite
 
 interface AuthContextType {
   currentUser: User | null;
@@ -54,15 +54,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       const data = JSON.parse(responseText); 
       
-      const loggedInUser = data.user as User;
+      const loggedInUser = data.user as User; // User type from Prisma will have role: string
       setCurrentUser(loggedInUser);
-      // localStorage.setItem('noterAppUser', JSON.stringify(loggedInUser)); // Not using localStorage for temporary admin
       router.push('/'); 
       return true;
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred during login.');
       setCurrentUser(null);
-      // localStorage.removeItem('noterAppUser'); // Not using localStorage for temporary admin
       return false;
     } finally {
       setIsLoading(false);
@@ -70,11 +68,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [router]);
 
   const logout = useCallback(() => {
-    // For temporary admin mode, logout can simply redirect or set user to null
-    // It won't truly log out a persisted session if we always default to admin on load.
     setCurrentUser(null); 
-    // localStorage.removeItem('noterAppUser'); // Not using localStorage for temporary admin
-    router.push('/login'); // Still redirect to login, though next load will be admin again
+    router.push('/login'); 
   }, [router]);
 
   useEffect(() => {
@@ -83,19 +78,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const defaultAdminUser: User = {
       id: 'default-admin-id', // Placeholder ID
       username: 'admin',
-      role: "ADMIN" as UserRole, // Use string literal, cast to UserRole type
+      role: "ADMIN", // Role is now a string literal
       password: '', // Password hash is not stored/used on client
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     setCurrentUser(defaultAdminUser);
     setIsLoading(false);
-  }, []); // Empty dependency array means this runs once on mount
+  }, []); 
 
-  // Effect to handle redirection based on auth state (won't redirect to login if admin is defaulted)
   useEffect(() => {
     if (!isLoading && !currentUser && pathname !== '/login') {
-      // This condition will likely not be met due to default admin user
       router.push('/login');
     }
   }, [isLoading, currentUser, pathname, router]);
