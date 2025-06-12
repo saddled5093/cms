@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import type { Note } from "@/types";
+import type { NoteFormData } from "@/components/note-form"; // Import NoteFormData
 import NoteCard from "@/components/note-card";
 import NoteForm from "@/components/note-form";
 import SearchBar from "@/components/search-bar";
@@ -29,6 +30,8 @@ export default function HomePage() {
       if (storedNotes) {
         setNotes(JSON.parse(storedNotes).map((note: any) => ({
           ...note,
+          categories: note.categories || [], // Ensure categories is an array
+          tags: note.tags || [], // Ensure tags is an array
           createdAt: new Date(note.createdAt),
           updatedAt: new Date(note.updatedAt),
         })));
@@ -58,7 +61,7 @@ export default function HomePage() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  const handleSaveNote = (data: { title: string; content: string }) => {
+  const handleSaveNote = (data: NoteFormData) => { // Use NoteFormData here
     if (editingNote) {
       setNotes(
         notes.map((note) =>
@@ -71,7 +74,10 @@ export default function HomePage() {
     } else {
       const newNote: Note = {
         id: generateId(),
-        ...data,
+        title: data.title,
+        content: data.content,
+        categories: data.categories,
+        tags: data.tags,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -101,10 +107,13 @@ export default function HomePage() {
 
   const filteredNotes = useMemo(() => {
     if (!debouncedSearchTerm) return notes;
+    const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
     return notes.filter(
       (note) =>
-        note.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        note.content.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+        note.title.toLowerCase().includes(lowerSearchTerm) ||
+        note.content.toLowerCase().includes(lowerSearchTerm) ||
+        note.categories.some(cat => cat.toLowerCase().includes(lowerSearchTerm)) ||
+        note.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm))
     );
   }, [notes, debouncedSearchTerm]);
 
@@ -146,7 +155,7 @@ export default function HomePage() {
             </p>
             <p className="text-md">
               {debouncedSearchTerm
-                ? "عبارات جستجوی خود را تغییر دهید."
+                ? "عبارات جستجوی خود را تغییر دهید یا فیلترهای دسته‌بندی/تگ را بررسی کنید."
                 : "برای شروع، روی 'یادداشت جدید' کلیک کنید!"}
             </p>
           </div>

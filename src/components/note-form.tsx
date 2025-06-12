@@ -28,9 +28,19 @@ import { useEffect } from "react";
 const noteFormSchema = z.object({
   title: z.string().min(1, "عنوان الزامی است").max(100, "عنوان باید ۱۰۰ کاراکتر یا کمتر باشد"),
   content: z.string().min(1, "محتوا الزامی است"),
+  categories: z.string().optional(), // Comma-separated string
+  tags: z.string().optional(), // Comma-separated string
 });
 
-type NoteFormData = z.infer<typeof noteFormSchema>;
+export type NoteFormData = {
+  title: string;
+  content: string;
+  categories: string[];
+  tags: string[];
+};
+
+// Internal form data type
+type FormSchemaType = z.infer<typeof noteFormSchema>;
 
 interface NoteFormProps {
   isOpen: boolean;
@@ -40,32 +50,55 @@ interface NoteFormProps {
 }
 
 export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: NoteFormProps) {
-  const form = useForm<NoteFormData>({
+  const form = useForm<FormSchemaType>({
     resolver: zodResolver(noteFormSchema),
     defaultValues: {
       title: "",
       content: "",
+      categories: "",
+      tags: "",
     },
   });
 
   useEffect(() => {
-    if (initialData) {
-      form.reset({
-        title: initialData.title || "",
-        content: initialData.content || "",
-      });
-    } else {
-      form.reset({ title: "", content: "" });
+    if (isOpen) {
+      if (initialData) {
+        form.reset({
+          title: initialData.title || "",
+          content: initialData.content || "",
+          categories: initialData.categories?.join(", ") || "",
+          tags: initialData.tags?.join(", ") || "",
+        });
+      } else {
+        form.reset({ title: "", content: "", categories: "", tags: "" });
+      }
     }
   }, [initialData, form, isOpen]);
 
-  const handleFormSubmit = (data: NoteFormData) => {
-    onSubmit(data);
+  const handleFormSubmit = (data: FormSchemaType) => {
+    const categoriesArray = data.categories
+      ? data.categories.split(",").map((cat) => cat.trim()).filter(cat => cat)
+      : [];
+    const tagsArray = data.tags
+      ? data.tags.split(",").map((tag) => tag.trim()).filter(tag => tag)
+      : [];
+    
+    onSubmit({
+      title: data.title,
+      content: data.content,
+      categories: categoriesArray,
+      tags: tagsArray,
+    });
     form.reset();
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        onClose();
+        form.reset(); // Ensure form is reset when dialog is closed via X or overlay click
+      }
+    }}>
       <DialogContent className="sm:max-w-[525px] bg-card text-card-foreground rounded-lg shadow-xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl">
@@ -104,9 +137,35 @@ export default function NoteForm({ isOpen, onClose, onSubmit, initialData }: Not
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="categories"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-foreground">دسته‌بندی‌ها (با کاما جدا کنید)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="مثال: کار، شخصی، پروژه آلفا" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-foreground">تگ‌ها (با کاما جدا کنید)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="مثال: مهم، فوری، ایده" {...field} className="bg-input text-foreground placeholder:text-muted-foreground"/>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <DialogFooter className="sm:justify-end gap-2 pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={onClose}>
+                <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); }}>
                   انصراف
                 </Button>
               </DialogClose>
