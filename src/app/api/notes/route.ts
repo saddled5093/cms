@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     return NextResponse.json(notes.map(note => {
       let parsedTags: string[] = [];
       try {
-        if (note.tags) {
+        if (note.tags && typeof note.tags === 'string') {
           parsedTags = JSON.parse(note.tags);
         }
       } catch (e) {
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
       let parsedPhoneNumbers: string[] = [];
       try {
-        if (note.phoneNumbers) {
+        if (note.phoneNumbers && typeof note.phoneNumbers === 'string') {
           parsedPhoneNumbers = JSON.parse(note.phoneNumbers);
         }
       } catch (e) {
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         isArchived: isArchived || false,
         isPublished: isPublished || false,
         authorId: authorId, // This should come from the authenticated user's session
-        categories: categoryIds ? {
+        categories: categoryIds && categoryIds.length > 0 ? {
           connect: categoryIds.map((id: string) => ({ id: id }))
         } : undefined,
       },
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
 
     let parsedTagsNew: string[] = [];
     try {
-      if (newNote.tags) {
+      if (newNote.tags && typeof newNote.tags === 'string') {
         parsedTagsNew = JSON.parse(newNote.tags);
       }
     } catch (e) {
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
 
     let parsedPhoneNumbersNew: string[] = [];
     try {
-      if (newNote.phoneNumbers) {
+      if (newNote.phoneNumbers && typeof newNote.phoneNumbers === 'string') {
         parsedPhoneNumbersNew = JSON.parse(newNote.phoneNumbers);
       }
     } catch (e) {
@@ -118,13 +118,19 @@ export async function POST(request: Request) {
     console.error('Failed to create note API:', error);
     if (error.code === 'P2002' && error.meta?.target?.includes('title')) {
       // Example: Handle unique constraint violation for title if you add one
-      return NextResponse.json({ error: 'A note with this title already exists.' }, { status: 409 });
+      return NextResponse.json({ error: 'A note with this title already exists.', details: 'A note with this title already exists.' }, { status: 409 });
     }
-    if (error.code === 'P2025') {
-        // Foreign key constraint failed (e.g. authorId or categoryId does not exist)
-        return NextResponse.json({ error: 'Invalid author or category ID.' }, { status: 400 });
+    if (error.code === 'P2003') { // Foreign key constraint failed
+        // Prisma's error.meta.field_name can sometimes indicate which foreign key failed, e.g., "Note_authorId_fkey (index)" or similar for relation fields.
+        // However, for connect operations on m-n relations, it might be less direct.
+        // For now, a general message is good.
+        return NextResponse.json({ error: 'Invalid author or category ID.', details: `Foreign key constraint failed. Ensure author and all categories exist. (Details: ${error.meta?.field_name || 'N/A'})` }, { status: 400 });
+    }
+    if (error.code === 'P2025') { // "Record to update/delete does not exist" - Can happen if trying to connect to a non-existent category/author
+        return NextResponse.json({ error: 'Invalid author or category ID.', details: 'One or more referenced authors or categories do not exist.' }, { status: 400 });
     }
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred on the server.';
     return NextResponse.json({ error: 'Failed to create note', details: errorMessage }, { status: 500 });
   }
 }
+
