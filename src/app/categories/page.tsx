@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Check, X, ListChecks } from "lucide-react";
+import { PlusCircle, Edit3, Check, X, ListChecks, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import type { Note } from "@/types";
 
@@ -183,9 +183,17 @@ export default function ManageCategoriesPage() {
                 <ListChecks className="ml-2 h-6 w-6" />
                 مدیریت دسته‌بندی‌ها
               </CardTitle>
-              <Button variant="outline" asChild>
-                <Link href="/notes">بازگشت به لیست یادداشت‌ها</Link>
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" asChild>
+                  <Link href="/" className="flex items-center">
+                    <LayoutDashboard className="ml-2 h-4 w-4" />
+                    داشبورد
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/notes">بازگشت به لیست یادداشت‌ها</Link>
+                </Button>
+              </div>
             </div>
             <CardDescription>
               دسته‌بندی‌های خود را برای یادداشت‌ها اضافه و یا تغییر نام دهید.
@@ -280,5 +288,3 @@ export default function ManageCategoriesPage() {
     </>
   );
 }
-
-    
