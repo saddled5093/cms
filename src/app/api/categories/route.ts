@@ -13,8 +13,8 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(categories.map(category => ({
         ...category,
-        createdAt: category.createdAt.toISOString(),
-        updatedAt: category.updatedAt.toISOString(),
+        createdAt: category.createdAt ? category.createdAt.toISOString() : new Date().toISOString(),
+        updatedAt: category.updatedAt ? category.updatedAt.toISOString() : new Date().toISOString(),
     })));
   } catch (error) {
     console.error('Failed to fetch categories:', error);
@@ -43,8 +43,8 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({
         ...newCategory,
-        createdAt: newCategory.createdAt.toISOString(),
-        updatedAt: newCategory.updatedAt.toISOString(),
+        createdAt: newCategory.createdAt ? newCategory.createdAt.toISOString() : new Date().toISOString(),
+        updatedAt: newCategory.updatedAt ? newCategory.updatedAt.toISOString() : new Date().toISOString(),
     }, { status: 201 });
   } catch (error: any) {
     console.error('Failed to create category:', error);

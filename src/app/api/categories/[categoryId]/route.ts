@@ -47,8 +47,8 @@ export async function PUT(
 
     return NextResponse.json({
         ...updatedCategory,
-        createdAt: updatedCategory.createdAt.toISOString(),
-        updatedAt: updatedCategory.updatedAt.toISOString(),
+        createdAt: updatedCategory.createdAt ? updatedCategory.createdAt.toISOString() : new Date().toISOString(),
+        updatedAt: updatedCategory.updatedAt ? updatedCategory.updatedAt.toISOString() : new Date().toISOString(),
     });
   } catch (error: any) {
     console.error('Failed to update category:', error);
