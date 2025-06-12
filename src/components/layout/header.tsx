@@ -1,20 +1,19 @@
 
-"use client"; // Add "use client" because we're using hooks (useAuth)
+"use client"; 
 
 import Link from 'next/link';
 import { AppLogo } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { ListChecks, LayoutDashboard, BookOpenText, LogOut, UserCircle } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+import { ListChecks, LayoutDashboard, BookOpenText, LogOut, UserCircle, Globe, User } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext'; 
 import { useRouter } from 'next/navigation';
 
 export default function Header() {
-  const { currentUser, logout } = useAuth(); // Get currentUser and logout function
+  const { currentUser, logout } = useAuth(); 
   const router = useRouter();
 
   const handleLogout = () => {
     logout();
-    // router.push('/login'); // logout() in AuthContext already handles redirection
   };
 
   return (
@@ -25,42 +24,59 @@ export default function Header() {
           <span className="font-headline text-2xl font-bold text-primary">یادداشت‌گاه</span>
         </Link>
         
-        {currentUser && ( // Only show nav links if user is logged in
-          <nav className="flex items-center gap-2">
-            <Button variant="ghost" asChild className="text-sm font-medium text-muted-foreground hover:text-primary">
+        <nav className="flex items-center gap-1 md:gap-2">
+          {currentUser && (
+            <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary">
               <Link href="/">
-                <LayoutDashboard className="ml-2 h-4 w-4" />
+                <LayoutDashboard className="ml-1 md:ml-2 h-4 w-4" />
                 داشبورد
               </Link>
             </Button>
-            <Button variant="ghost" asChild className="text-sm font-medium text-muted-foreground hover:text-primary">
-              <Link href="/notes">
-                <BookOpenText className="ml-2 h-4 w-4" />
-                همه یادداشت‌ها
-              </Link>
-            </Button>
-            {currentUser.role === 'ADMIN' && ( // Show only if user is ADMIN
-              <Button variant="ghost" asChild className="text-sm font-medium text-muted-foreground hover:text-primary">
-                <Link href="/categories">
-                  <ListChecks className="ml-2 h-4 w-4" />
-                  مدیریت دسته‌بندی‌ها
+          )}
+          <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary">
+            <Link href="/all-notes">
+              <Globe className="ml-1 md:ml-2 h-4 w-4" />
+              همه یادداشت‌ها
+            </Link>
+          </Button>
+          {currentUser && (
+            <>
+              <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary">
+                <Link href="/my-notes">
+                  <User className="ml-1 md:ml-2 h-4 w-4" />
+                  یادداشت‌های من
                 </Link>
               </Button>
-            )}
-          </nav>
-        )}
+              {currentUser.role === 'ADMIN' && ( 
+                <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary">
+                  <Link href="/categories">
+                    <ListChecks className="ml-1 md:ml-2 h-4 w-4" />
+                    دسته‌بندی‌ها
+                  </Link>
+                </Button>
+              )}
+            </>
+          )}
+        </nav>
 
         {currentUser && (
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="hidden sm:flex items-center gap-1 text-xs md:text-sm text-muted-foreground">
               <UserCircle className="h-5 w-5" />
               <span>{currentUser.username} ({currentUser.role})</span>
             </div>
             <Button variant="outline" size="sm" onClick={handleLogout} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-              <LogOut className="ml-2 h-4 w-4" />
-              خروج
+              <LogOut className="ml-1 md:ml-2 h-4 w-4" />
+              <span className="hidden sm:inline">خروج</span>
             </Button>
           </div>
+        )}
+        {!currentUser && (
+           <Button variant="outline" size="sm" asChild>
+             <Link href="/login">
+                ورود
+             </Link>
+           </Button>
         )}
       </div>
     </header>

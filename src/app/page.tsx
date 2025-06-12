@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import type { Note } from "@/types"; 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight, CalendarDays, Loader2 } from "lucide-react";
+import { BarChartIcon, PieChartIcon, LineChart as LChartIcon, List, ArrowRight, CalendarDays, Loader2, User } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
@@ -16,8 +16,8 @@ import { format as formatJalali } from 'date-fns-jalali';
 import { useAuth } from "@/contexts/AuthContext";
 
 const MAX_RECENT_NOTES = 5;
-const DATE_DISPLAY_FORMAT_CARD = 'yyyy/M/d HH:mm'; // For cards/lists
-const DATE_DISPLAY_FORMAT_TOOLTIP = 'yyyy/M/d'; // For chart tooltips if different
+const DATE_DISPLAY_FORMAT_CARD = 'yyyy/M/d HH:mm'; 
+const DATE_DISPLAY_FORMAT_TOOLTIP = 'yyyy/M/d'; 
 
 const aggregateData = (notes: Note[], groupBy: 'day' | 'province' | 'category', dateRange?: {start: Date, end: Date}) => {
   const aggregation: { [key: string]: number } = {};
@@ -77,7 +77,8 @@ export default function DashboardPage() {
     if (!currentUser) return;
     setIsLoadingNotes(true);
     try {
-      const response = await fetch(`/api/notes?userId=${currentUser.id}`); 
+      // Use the new API filter for dashboard/user's own notes
+      const response = await fetch(`/api/notes?filter=dashboard&userId=${currentUser.id}`); 
       if (!response.ok) {
         let errorDetails = 'Failed to fetch notes for dashboard';
         try {
@@ -103,6 +104,8 @@ export default function DashboardPage() {
           eventDate: eventDt,
           createdAt: createdDt,
           updatedAt: updatedDt,
+          authorId: note.authorId || note.author?.id,
+          author: note.author ? { id: note.author.id, username: note.author.username } : undefined,
           categories: Array.isArray(note.categories) ? note.categories.map((c: any) => typeof c === 'string' ? {id: c, name: c} : (c && c.name ? c : {id: String(c), name: String(c)})) : [],
           tags: Array.isArray(note.tags) ? note.tags : (typeof note.tags === 'string' ? JSON.parse(note.tags || "[]") : []),
           phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : (typeof note.phoneNumbers === 'string' ? JSON.parse(note.phoneNumbers || "[]") : []),
@@ -208,7 +211,7 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-headline text-primary">داشبورد</h1>
         <Button asChild variant="outline">
-          <Link href="/notes">
+          <Link href="/all-notes"> 
             مشاهده همه یادداشت‌ها
             <ArrowRight className="mr-2 h-4 w-4" />
           </Link>
@@ -237,7 +240,7 @@ export default function DashboardPage() {
                       indicator="line" 
                       labelFormatter={(_, payload) => {
                         if (payload && payload.length > 0 && payload[0].payload.originalDate) {
-                           return `روز ${formatJalali(parseISO(payload[0].payload.originalDate), 'do MMMM', { locale: faIR })}`; // Keep detailed tooltip
+                           return `روز ${formatJalali(parseISO(payload[0].payload.originalDate), 'do MMMM', { locale: faIR })}`; 
                         }
                         return '';
                       }}
@@ -338,7 +341,7 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="text-xl font-headline text-primary flex items-center">
             <List className="ml-2 h-5 w-5" />
-            یادداشت‌های اخیر
+            یادداشت‌های اخیر (مربوط به شما)
           </CardTitle>
           <CardDescription>نگاهی سریع به آخرین یادداشت‌های بروزرسانی شده شما.</CardDescription>
         </CardHeader>
@@ -362,12 +365,10 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground text-center py-6">هنوز یادداشتی ایجاد نشده است.</p>
+            <p className="text-muted-foreground text-center py-6">هنوز یادداشتی ایجاد نکرده‌اید.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-    

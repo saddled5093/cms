@@ -4,35 +4,28 @@ import prisma from '@/lib/prisma';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const authorFilterUserId = searchParams.get('userId'); // For dashboard, or "view all notes by user X"
-  const requestingUserId = searchParams.get('requestingUserId'); // For notes list for the current logged-in user
+  const filter = searchParams.get('filter'); // 'public', 'mine', 'dashboard'
+  const userId = searchParams.get('userId'); // Used with 'mine' or 'dashboard'
 
   try {
     const findManyArgs: any = {
       orderBy: { updatedAt: 'desc' },
       include: {
         categories: { select: { id: true, name: true }},
-        author: { select: { username: true }} // author username is enough for list views
+        // Ensure author id is fetched for conditional rendering of edit/delete
+        author: { select: { username: true, id: true }} 
       },
     };
 
-    if (authorFilterUserId) {
-      // Use case: Dashboard, or "view all notes by user X"
-      // Fetches ALL notes (published or not) for the specified authorFilterUserId
-      findManyArgs.where = { authorId: authorFilterUserId };
-    } else if (requestingUserId) {
-      // Use case: General notes list for the logged-in user `requestingUserId`
-      // Fetches all globally published notes from ANY author,
-      // AND all notes (published or not) by the `requestingUserId`.
-      findManyArgs.where = {
-        OR: [
-          { isPublished: true },
-          { authorId: requestingUserId }
-        ]
-      };
+    if (filter === 'mine' && userId) {
+      findManyArgs.where = { authorId: userId };
+    } else if (filter === 'dashboard' && userId) {
+      // For dashboard, effectively the same as 'mine' - all notes of the user
+      findManyArgs.where = { authorId: userId };
+    } else if (filter === 'public') {
+      findManyArgs.where = { isPublished: true };
     } else {
-      // Use case: Public view, no user context provided (e.g., if an unauthenticated part of an app called this)
-      // Show only globally published notes from ANY author.
+      // Default to public if no specific filter or unrecognized filter
       findManyArgs.where = { isPublished: true };
     }
 
@@ -68,6 +61,8 @@ export async function GET(request: Request) {
         updatedAt: note.updatedAt ? note.updatedAt.toISOString() : new Date().toISOString(),
         tags: parsedTags,
         phoneNumbers: parsedPhoneNumbers,
+        // Ensure author object has id
+        author: note.author ? { id: note.author.id, username: note.author.username } : undefined,
       };
     }));
   } catch (error: any) {
@@ -91,9 +86,9 @@ export async function POST(request: Request) {
         title,
         content,
         eventDate: new Date(eventDate),
-        tags: JSON.stringify(tags || []), // Ensure tags are stringified
+        tags: JSON.stringify(tags || []), 
         province,
-        phoneNumbers: JSON.stringify(phoneNumbers || []), // Ensure phoneNumbers are stringified
+        phoneNumbers: JSON.stringify(phoneNumbers || []), 
         isArchived: isArchived || false,
         isPublished: isPublished || false,
         authorId: authorId,
@@ -103,7 +98,7 @@ export async function POST(request: Request) {
       },
       include: {
         categories: { select: { id: true, name: true }},
-        author: { select: { username: true }}
+        author: { select: { username: true, id: true }} // Ensure author id is included
       }
     });
 
@@ -132,6 +127,7 @@ export async function POST(request: Request) {
         updatedAt: newNote.updatedAt ? newNote.updatedAt.toISOString() : new Date().toISOString(),
         tags: parsedTagsNew,
         phoneNumbers: parsedPhoneNumbersNew,
+        author: newNote.author ? { id: newNote.author.id, username: newNote.author.username } : undefined,
     }, { status: 201 });
   } catch (error: any) {
     console.error('Failed to create note API:', error);

@@ -4,11 +4,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } 
 from 'next/navigation';
-import type { Note, Category, Comment as CommentType } from '@/types';
+import type { Note, Category, Comment as CommentType, CurrentUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input'; // Keep for general input if needed, but rating changes
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +17,7 @@ import { faIR } from 'date-fns-jalali/locale';
 import { parseISO, isValid as isValidDateFn } from 'date-fns';
 import Link from 'next/link';
 import ConfirmDialog from '@/components/confirm-dialog';
-import InteractiveDateDisplay from '@/components/interactive-date-display'; // Import new component
+import InteractiveDateDisplay from '@/components/interactive-date-display'; 
 
 export default function NoteDetailPage() {
   const { noteId } = useParams<{ noteId: string }>();
@@ -28,11 +27,10 @@ export default function NoteDetailPage() {
 
   const [note, setNote] = useState<Note | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // isEditing state is removed, navigation handles edits
   
   const [newComment, setNewComment] = useState("");
   const [comments, setComments] = useState<CommentType[]>([]);
-  const [isLoadingComments, setIsLoadingComments] = useState(false); // Retained for comment loading
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
 
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
@@ -52,6 +50,8 @@ export default function NoteDetailPage() {
       eventDate: eventDt,
       createdAt: createdDt,
       updatedAt: updatedDt,
+      authorId: fetchedNote.authorId || fetchedNote.author?.id, // Ensure authorId is present
+      author: fetchedNote.author ? { id: fetchedNote.author.id, username: fetchedNote.author.username } : undefined,
       categories: Array.isArray(fetchedNote.categories)
         ? fetchedNote.categories.map((c: any) => (typeof c === 'string' ? { id: c, name: c } : (c && c.name ? c : { id: String(c), name: String(c) })))
         : [],
@@ -99,7 +99,6 @@ export default function NoteDetailPage() {
 
   useEffect(() => {
     fetchNoteDetails();
-    // No need to fetch available categories here unless needed for something else on this page
   }, [fetchNoteDetails]);
 
 
@@ -120,7 +119,7 @@ export default function NoteDetailPage() {
             throw new Error(errorData.details || errorData.error || 'Failed to update rating');
         }
         const updatedNoteRaw = await response.json();
-        setNote(processFetchedNote(updatedNoteRaw)); // Update local state
+        setNote(processFetchedNote(updatedNoteRaw)); 
         toast({ title: "موفقیت", description: `امتیاز یادداشت به ${ratingValue} تغییر کرد.` });
       } catch (error: any) {
          toast({ title: "خطا", description: error.message || "ثبت امتیاز با مشکل مواجه شد.", variant: "destructive"});
@@ -146,7 +145,7 @@ export default function NoteDetailPage() {
           ...newCommentRaw,
           createdAt: parseISO(newCommentRaw.createdAt),
           updatedAt: parseISO(newCommentRaw.updatedAt),
-          author: { username: currentUser.username }, // Add author from current user
+          author: { username: currentUser.username, id: currentUser.id }, 
       };
       setComments(prev => [...prev, newCommentData].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
       setNewComment("");
@@ -157,9 +156,11 @@ export default function NoteDetailPage() {
   };
 
   const handleDeleteRequest = () => {
-    if (note) {
+    if (note && currentUser && (currentUser.id === note.authorId || currentUser.role === "ADMIN")) {
       setNoteToDeleteId(note.id);
       setDeleteConfirmationStep(1);
+    } else {
+      toast({ title: "عدم دسترسی", description: "شما اجازه حذف این یادداشت را ندارید.", variant: "destructive" });
     }
   };
 
@@ -174,7 +175,7 @@ export default function NoteDetailPage() {
             throw new Error(errorData.details || errorData.error || "Failed to delete note from server");
         }
         toast({ title: "یادداشت حذف شد" });
-        router.push('/notes'); 
+        router.push(note?.authorId === currentUser?.id ? '/my-notes' : '/all-notes'); 
       } catch (error: any) {
         console.error("Failed to delete note:", error);
         toast({ title: "خطا در حذف یادداشت", description: error.message, variant: "destructive" });
@@ -190,7 +191,10 @@ export default function NoteDetailPage() {
   };
 
   const handleToggleArchive = async () => {
-    if (!note) return;
+    if (!note || !currentUser || (currentUser.id !== note.authorId && currentUser.role !== "ADMIN")) {
+       toast({ title: "عدم دسترسی", description: "شما اجازه تغییر وضعیت آرشیو این یادداشت را ندارید.", variant: "destructive" });
+       return;
+    }
     const newArchivedState = !note.isArchived;
     try {
         const response = await fetch(`/api/notes/${note.id}`, {
@@ -212,7 +216,10 @@ export default function NoteDetailPage() {
   };
 
   const handleTogglePublish = async () => {
-    if (!note) return;
+    if (!note || !currentUser || (currentUser.id !== note.authorId && currentUser.role !== "ADMIN")) {
+       toast({ title: "عدم دسترسی", description: "شما اجازه تغییر وضعیت انتشار این یادداشت را ندارید.", variant: "destructive" });
+       return;
+    }
     const newPublishedState = !note.isPublished;
     try {
          const response = await fetch(`/api/notes/${note.id}`, {
@@ -248,7 +255,7 @@ export default function NoteDetailPage() {
       <div className="container mx-auto p-4 md:p-8 text-center">
         <p className="text-xl text-destructive mb-4">یادداشت مورد نظر یافت نشد.</p>
         <Button asChild variant="outline">
-          <Link href="/notes">
+          <Link href="/all-notes">
             <ArrowLeft className="ml-2 h-4 w-4" />
             بازگشت به لیست یادداشت‌ها
           </Link>
@@ -256,13 +263,15 @@ export default function NoteDetailPage() {
       </div>
     );
   }
+  
+  const canManageNote = currentUser && (currentUser.id === note.authorId || currentUser.role === "ADMIN");
 
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="mb-6">
-        <Button variant="outline" size="sm" onClick={() => router.push('/notes')}>
+        <Button variant="outline" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="ml-2 h-4 w-4" />
-          بازگشت به لیست یادداشت‌ها
+          بازگشت 
         </Button>
       </div>
 
@@ -270,24 +279,26 @@ export default function NoteDetailPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start">
             <CardTitle className="text-3xl font-headline text-primary mb-2 sm:mb-0">{note.title}</CardTitle>
-            <div className="flex gap-2 items-center flex-wrap">
-                <Button variant="outline" size="sm" asChild className="text-accent hover:text-accent/80">
-                    <Link href={`/notes/${note.id}/edit`}>
-                        <Edit3 className="ml-2 h-4 w-4" />
-                        ویرایش
-                    </Link>
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleDeleteRequest} className="text-destructive hover:text-destructive/80">
-                    <Trash2 className="ml-2 h-4 w-4" />
-                    حذف
-                </Button>
-                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleToggleArchive} aria-label={note.isArchived ? "بازیابی یادداشت" : "آرشیو یادداشت"}>
-                    {note.isArchived ? <ArchiveRestore className="h-5 w-5 text-muted-foreground hover:text-foreground" /> : <Archive className="h-5 w-5 text-muted-foreground hover:text-foreground" />}
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleTogglePublish} aria-label={note.isPublished ? "لغو انتشار یادداشت" : "انتشار یادداشت"}>
-                    {note.isPublished ? <EyeOff className="h-5 w-5 text-muted-foreground hover:text-foreground" /> : <Eye className="h-5 w-5 text-muted-foreground hover:text-foreground" />}
-                </Button>
-            </div>
+            {canManageNote && (
+              <div className="flex gap-2 items-center flex-wrap">
+                  <Button variant="outline" size="sm" asChild className="text-accent hover:text-accent/80">
+                      <Link href={`/notes/${note.id}/edit`}>
+                          <Edit3 className="ml-2 h-4 w-4" />
+                          ویرایش
+                      </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDeleteRequest} className="text-destructive hover:text-destructive/80">
+                      <Trash2 className="ml-2 h-4 w-4" />
+                      حذف
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleToggleArchive} aria-label={note.isArchived ? "بازیابی یادداشت" : "آرشیو یادداشت"}>
+                      {note.isArchived ? <ArchiveRestore className="h-5 w-5 text-muted-foreground hover:text-foreground" /> : <Archive className="h-5 w-5 text-muted-foreground hover:text-foreground" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleTogglePublish} aria-label={note.isPublished ? "لغو انتشار یادداشت" : "انتشار یادداشت"}>
+                      {note.isPublished ? <EyeOff className="h-5 w-5 text-muted-foreground hover:text-foreground" /> : <Eye className="h-5 w-5 text-muted-foreground hover:text-foreground" />}
+                  </Button>
+              </div>
+            )}
           </div>
           <CardDescription className="text-sm text-muted-foreground mt-2 space-y-1">
             <div>
@@ -442,6 +453,3 @@ export default function NoteDetailPage() {
     </div>
   );
 }
-
-
-    
