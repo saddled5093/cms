@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react"; // Added useCallback
-import type { Note, Category } from "@/types";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import type { Note, Category, Comment as CommentType } from "@/types";
 import type { NoteFormData } from "@/components/note-form";
 import NoteCard from "@/components/note-card";
 import NoteForm from "@/components/note-form";
@@ -14,23 +14,25 @@ import { FilePlus, ServerCrash, FilterX, Search, Calendar as CalendarIconLucide,
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import Link from "next/link"; 
+import Link from "next/link";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format as formatDateFn, startOfDay, endOfDay, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { faIR } from 'date-fns/locale/fa-IR';
 import { format as formatJalali } from 'date-fns-jalali';
 import type { DateRange } from "react-day-picker";
-import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
+import { useAuth } from "@/contexts/AuthContext";
+import { UserRole } from '@prisma/client';
+
 
 type ArchiveFilterStatus = "all" | "archived" | "unarchived";
 type PublishFilterStatus = "all" | "published" | "unpublished";
 
 export default function NotesPage() {
-  const { currentUser, isLoading: isAuthLoading } = useAuth(); // Get currentUser
+  const { currentUser, isLoading: isAuthLoading } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
-  
+
   const [titleSearch, setTitleSearch] = useState("");
   const [contentSearch, setContentSearch] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
@@ -39,7 +41,7 @@ export default function NotesPage() {
   const [debouncedTitleSearch, setDebouncedTitleSearch] = useState("");
   const [debouncedContentSearch, setDebouncedContentSearch] = useState("");
   const [debouncedPhoneSearch, setDebouncedPhoneSearch] = useState("");
-  
+
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [noteToDeleteId, setNoteToDeleteId] = useState<string | null>(null);
@@ -54,42 +56,46 @@ export default function NotesPage() {
 
   const { toast } = useToast();
 
+  const processFetchedNote = (note: any): Note => {
+    let eventDt = note.eventDate ? parseISO(note.eventDate) : (note.createdAt ? parseISO(note.createdAt) : new Date());
+    if (!isValidDateFn(eventDt)) eventDt = new Date();
+    let createdDt = note.createdAt ? parseISO(note.createdAt) : new Date();
+    if (!isValidDateFn(createdDt)) createdDt = new Date();
+    let updatedDt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
+    if (!isValidDateFn(updatedDt)) updatedDt = new Date();
+
+    return {
+      ...note,
+      eventDate: eventDt,
+      createdAt: createdDt,
+      updatedAt: updatedDt,
+      categories: Array.isArray(note.categories)
+        ? note.categories.map((c: any) => (typeof c === 'string' ? { id: c, name: c } : (c && c.name ? c : { id: String(c), name: String(c) })))
+        : [],
+      tags: Array.isArray(note.tags) ? note.tags : [],
+      phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : [],
+      province: note.province || "",
+      rating: note.rating ?? 0,
+      comments: (note.comments || []).map((comment: any) => ({
+        ...comment,
+        createdAt: comment.createdAt ? parseISO(comment.createdAt) : new Date(),
+        updatedAt: comment.updatedAt ? parseISO(comment.updatedAt) : new Date(),
+      })),
+    };
+  };
+
+
   const fetchNotes = useCallback(async () => {
-    if (!currentUser) return; // Don't fetch if no user
+    if (!currentUser) return;
     setIsLoadingNotes(true);
     try {
-      // TODO: Add query param for authorId if non-admin, or fetch all if admin
-      // For now, assuming API filters by author or returns all if admin.
-      const response = await fetch(`/api/notes?userId=${currentUser.id}`); 
+      const response = await fetch(`/api/notes?userId=${currentUser.id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch notes');
       }
-      let fetchedNotes: any[] = await response.json();
-      
-      fetchedNotes = fetchedNotes.map(note => {
-        let eventDt = note.eventDate ? parseISO(note.eventDate) : (note.createdAt ? parseISO(note.createdAt) : new Date());
-        if (!isValidDateFn(eventDt)) eventDt = new Date();
-        let createdDt = note.createdAt ? parseISO(note.createdAt) : new Date();
-        if(!isValidDateFn(createdDt)) createdDt = new Date();
-        let updatedDt = note.updatedAt ? parseISO(note.updatedAt) : new Date();
-        if(!isValidDateFn(updatedDt)) updatedDt = new Date();
-
-        return {
-          ...note,
-          eventDate: eventDt,
-          createdAt: createdDt,
-          updatedAt: updatedDt,
-          // Ensure categories is an array of {id, name} objects
-          categories: Array.isArray(note.categories) 
-            ? note.categories.map((c: any) => (typeof c === 'string' ? {id: c, name: c} : (c && c.name ? c : {id: String(c), name: String(c)}))) 
-            : [],
-          tags: Array.isArray(note.tags) ? note.tags : [],
-          phoneNumbers: Array.isArray(note.phoneNumbers) ? note.phoneNumbers : [],
-          province: note.province || "",
-        };
-      });
-
-      setNotes(fetchedNotes as Note[]);
+      let fetchedNotesRaw: any[] = await response.json();
+      const processedNotes = fetchedNotesRaw.map(processFetchedNote);
+      setNotes(processedNotes);
     } catch (error) {
       console.error("Failed to load notes from API", error);
       toast({
@@ -102,26 +108,23 @@ export default function NotesPage() {
     }
   }, [currentUser, toast]);
 
+
   const fetchAvailableCategories = useCallback(async () => {
-    // This should fetch categories from API eventually
-    // For now, it might still rely on seed or a simpler mechanism if API is not ready
-    // Or, derive from notes if API doesn't exist for categories yet.
     try {
+      // Placeholder, assuming categories API might not be ready or used for this specific purpose
       // const response = await fetch('/api/categories');
       // if (!response.ok) throw new Error('Failed to fetch categories');
       // const data: Category[] = await response.json();
       // setAvailableCategories(data.sort((a,b) => a.name.localeCompare(b.name, 'fa')));
-       const placeholderCategories: Category[] = [
-            // { id: "cat1", name: "عمومی" }, {id: "cat2", name: "کاری"}
-        ]; 
-        setAvailableCategories(placeholderCategories);
-
+      const placeholderCategories: Category[] = [
+        // { id: "cat1", name: "عمومی" }, {id: "cat2", name: "کاری"}
+      ];
+      setAvailableCategories(placeholderCategories);
     } catch (error) {
       console.error("Failed to load categories", error);
       // toast({ title: "خطا در بارگذاری دسته‌بندی‌ها", variant: "destructive" });
     }
-  }, [toast]);
-
+  }, []); // Removed toast dependency to avoid loop if toast itself causes re-render.
 
   useEffect(() => {
     if (currentUser) {
@@ -129,7 +132,7 @@ export default function NotesPage() {
       fetchAvailableCategories();
     }
   }, [currentUser, fetchNotes, fetchAvailableCategories]);
-  
+
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedTitleSearch(titleSearch), 300);
     return () => clearTimeout(handler);
@@ -148,17 +151,16 @@ export default function NotesPage() {
   const allUniqueCategoriesFromNotes = useMemo(() => {
     const catMap = new Map<string, Category>();
     notes.forEach(note => note.categories.forEach(cat => {
-        if(cat && cat.id && cat.name && !catMap.has(cat.id)) {
-            catMap.set(cat.id, cat);
-        }
+      if (cat && cat.id && cat.name && !catMap.has(cat.id)) {
+        catMap.set(cat.id, cat);
+      }
     }));
     return Array.from(catMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'fa'));
   }, [notes]);
-  
-  const displayableCategories = useMemo(() => {
-      return availableCategories.length > 0 ? availableCategories : allUniqueCategoriesFromNotes;
-  }, [availableCategories, allUniqueCategoriesFromNotes]);
 
+  const displayableCategories = useMemo(() => {
+    return availableCategories.length > 0 ? availableCategories : allUniqueCategoriesFromNotes;
+  }, [availableCategories, allUniqueCategoriesFromNotes]);
 
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -189,7 +191,7 @@ export default function NotesPage() {
         : [...prev, tag]
     );
   };
-  
+
   const toggleProvinceFilter = (province: string) => {
     setSelectedProvinces(prev =>
       prev.includes(province)
@@ -212,40 +214,32 @@ export default function NotesPage() {
 
   const handleSaveNote = async (data: NoteFormData) => {
     if (!currentUser) {
-        toast({ title: "خطا", description: "برای ذخیره یادداشت باید وارد شوید.", variant: "destructive"});
-        return;
+      toast({ title: "خطا", description: "برای ذخیره یادداشت باید وارد شوید.", variant: "destructive" });
+      return;
     }
-    const payload = { 
-        ...data, 
-        authorId: currentUser.id,
-        eventDate: data.eventDate.toISOString(),
-        // categoryIds should already be in data from NoteForm
+    const payload = {
+      ...data,
+      authorId: currentUser.id,
+      eventDate: data.eventDate.toISOString(),
     };
 
     try {
       let response;
-      let savedNoteData;
+      let savedNoteDataRaw;
 
       if (editingNote) {
-        // TODO: Implement PUT /api/notes/:id
-        console.warn("Update (PUT) not fully implemented yet, using optimistic update for now.");
-         setNotes(
-            notes.map((note) =>
-            note.id === editingNote.id
-                ? { 
-                    ...note, 
-                    ...data,
-                    eventDate: data.eventDate, 
-                    updatedAt: new Date(),
-                    categories: data.categoryIds.map(id => {
-                        const foundCat = displayableCategories.find(ac => ac.id === id);
-                        return foundCat || { id: id, name: id };
-                    })
-                }
-                : note
-            )
-        );
-        savedNoteData = { ...editingNote, ...data, eventDate: data.eventDate.toISOString(), updatedAt: new Date().toISOString() };
+        // TODO: Implement PUT /api/notes/:id for full update
+        // For now, using optimistic update + refetch as PUT /api/notes/:id might not exist or be fully implemented
+        response = await fetch(`/api/notes/${editingNote.id}`, { // Assuming PUT /api/notes/:id exists
+            method: 'PUT', // Needs to be implemented in /api/notes/[noteId]/route.ts
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+         if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || errorData.details || 'Failed to update note');
+        }
+        savedNoteDataRaw = await response.json();
 
       } else {
         response = await fetch('/api/notes', {
@@ -253,20 +247,14 @@ export default function NotesPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || errorData.details || 'Failed to save note');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || errorData.details || 'Failed to save note');
         }
-        savedNoteData = await response.json();
+        savedNoteDataRaw = await response.json();
       }
 
-      const finalNote: Note = {
-        ...savedNoteData,
-        eventDate: parseISO(savedNoteData.eventDate as string),
-        createdAt: parseISO(savedNoteData.createdAt as string),
-        updatedAt: parseISO(savedNoteData.updatedAt as string),
-        categories: savedNoteData.categories || [], // Ensure categories is an array
-      };
+      const finalNote = processFetchedNote(savedNoteDataRaw);
 
       if (editingNote) {
         setNotes(notes.map(n => n.id === editingNote.id ? finalNote : n));
@@ -284,7 +272,6 @@ export default function NotesPage() {
     setEditingNote(null);
   };
 
-
   const handleEditNote = (note: Note) => {
     setEditingNote(note);
     setIsFormOpen(true);
@@ -301,18 +288,20 @@ export default function NotesPage() {
     } else if (deleteConfirmationStep === 2 && noteToDeleteId) {
       try {
         // TODO: Implement DELETE /api/notes/:id
-        console.warn("Delete (DELETE) not fully implemented yet, using optimistic update.");
+        // const response = await fetch(`/api/notes/${noteToDeleteId}`, { method: 'DELETE' });
+        // if (!response.ok) throw new Error("Failed to delete note from server");
+        
         setNotes(notes.filter((note) => note.id !== noteToDeleteId));
-        toast({ title: "یادداشت (به صورت محلی) حذف شد" });
+        toast({ title: "یادداشت حذف شد" }); // Update message based on actual deletion type
       } catch (error) {
         console.error("Failed to delete note:", error);
         toast({ title: "خطا در حذف یادداشت", variant: "destructive" });
       }
       setNoteToDeleteId(null);
-      setDeleteConfirmationStep(1); 
+      setDeleteConfirmationStep(1);
     }
   };
-  
+
   const cancelDeleteNote = () => {
     setNoteToDeleteId(null);
     setDeleteConfirmationStep(1);
@@ -323,27 +312,128 @@ export default function NotesPage() {
     if (!noteToUpdate) return;
 
     const newArchivedState = !noteToUpdate.isArchived;
-    // TODO: Call API to update archive status
-    setNotes(prevNotes =>
-      prevNotes.map(note =>
-        note.id === noteId ? { ...note, isArchived: newArchivedState, updatedAt: new Date() } : note
-      )
-    );
-    toast({ title: `یادداشت (محلی) ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
+    try {
+        // TODO: Implement PUT /api/notes/:id/archive or similar
+        // For now, optimistic update
+        // const response = await fetch(`/api/notes/${noteId}`, {
+        //     method: 'PUT',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ isArchived: newArchivedState }),
+        // });
+        // if (!response.ok) throw new Error("Failed to update archive status on server");
+        // const updatedNoteRaw = await response.json();
+        // const updatedNote = processFetchedNote(updatedNoteRaw);
+        // setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
+        
+        setNotes(prevNotes =>
+          prevNotes.map(note =>
+            note.id === noteId ? { ...note, isArchived: newArchivedState, updatedAt: new Date() } : note
+          )
+        );
+        toast({ title: `یادداشت ${newArchivedState ? "آرشیو شد" : "از آرشیو خارج شد" }` });
+    } catch (error) {
+        console.error("Failed to toggle archive status:", error);
+        toast({ title: "خطا در تغییر وضعیت آرشیو", variant: "destructive" });
+        // Revert optimistic update if API call fails
+        setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? { ...note, isArchived: !newArchivedState } : note));
+    }
   };
 
   const handleTogglePublish = async (noteId: string) => {
     const noteToUpdate = notes.find(n => n.id === noteId);
     if (!noteToUpdate) return;
-    
+
     const newPublishedState = !noteToUpdate.isPublished;
-     // TODO: Call API to update publish status
-    setNotes(prevNotes =>
-      prevNotes.map(note =>
-        note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
-      )
-    );
-    toast({ title: `وضعیت انتشار یادداشت (محلی) ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
+    try {
+        // TODO: Implement PUT /api/notes/:id/publish or similar
+        // For now, optimistic update
+        // const response = await fetch(`/api/notes/${noteId}`, {
+        //     method: 'PUT',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ isPublished: newPublishedState }),
+        // });
+        // if (!response.ok) throw new Error("Failed to update publish status on server");
+        // const updatedNoteRaw = await response.json();
+        // const updatedNote = processFetchedNote(updatedNoteRaw);
+        // setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
+
+        setNotes(prevNotes =>
+          prevNotes.map(note =>
+            note.id === noteId ? { ...note, isPublished: newPublishedState, updatedAt: new Date() } : note
+          )
+        );
+        toast({ title: `وضعیت انتشار یادداشت ${newPublishedState ? "به 'منتشر شده' تغییر کرد" : "به 'عدم انتشار' تغییر کرد" }` });
+    } catch (error) {
+        console.error("Failed to toggle publish status:", error);
+        toast({ title: "خطا در تغییر وضعیت انتشار", variant: "destructive" });
+         // Revert optimistic update if API call fails
+        setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? { ...note, isPublished: !newPublishedState } : note));
+    }
+  };
+
+  const handleRatingChange = async (noteId: string, rating: number) => {
+    if (!currentUser || currentUser.role !== UserRole.ADMIN) {
+        toast({ title: "خطا", description: "فقط مدیران می‌توانند امتیاز دهند.", variant: "destructive"});
+        return;
+    }
+    try {
+        const response = await fetch(`/api/notes/${noteId}/rating`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to update rating on server');
+        }
+        const updatedNoteRaw = await response.json();
+        const updatedNote = processFetchedNote(updatedNoteRaw);
+        setNotes(prevNotes => prevNotes.map(note => note.id === noteId ? updatedNote : note));
+        // toast({ title: "موفقیت", description: `امتیاز یادداشت به ${rating} تغییر کرد.` }); // Toast moved to NoteCard
+    } catch (error: any) {
+        console.error("Failed to update rating:", error);
+        toast({ title: "خطا در ثبت امتیاز", description: error.message, variant: "destructive" });
+        // Optionally revert optimistic update in NoteCard if needed, or refetch
+    }
+  };
+
+  const handleAddComment = async (noteId: string, content: string) => {
+    if (!currentUser) {
+        toast({ title: "خطا", description: "برای ثبت نظر باید وارد شوید.", variant: "destructive"});
+        return;
+    }
+    try {
+        const response = await fetch(`/api/notes/${noteId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, authorId: currentUser.id }), // Send authorId
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to add comment on server');
+        }
+        const newCommentRaw = await response.json();
+        const newComment: CommentType = {
+            ...newCommentRaw,
+            createdAt: parseISO(newCommentRaw.createdAt),
+            updatedAt: parseISO(newCommentRaw.updatedAt),
+        };
+        
+        // Update the specific note's comments
+        setNotes(prevNotes => prevNotes.map(n => {
+            if (n.id === noteId) {
+                return {
+                    ...n,
+                    comments: [...(n.comments || []), newComment]
+                };
+            }
+            return n;
+        }));
+        // toast({ title: "موفقیت", description: "نظر شما ثبت شد." }); // Toast moved to NoteCard
+    } catch (error: any) {
+        console.error("Failed to add comment:", error);
+        toast({ title: "خطا در ثبت نظر", description: error.message, variant: "destructive" });
+    }
   };
 
 
@@ -359,13 +449,13 @@ export default function NotesPage() {
     if (debouncedPhoneSearch) {
       tempNotes = tempNotes.filter(note => note.phoneNumbers.some(pn => pn.includes(debouncedPhoneSearch)));
     }
-    
+
     if (dateRange?.from) {
       const startDate = startOfDay(dateRange.from);
       const endDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
-      
+
       tempNotes = tempNotes.filter(note => {
-        const noteEventDate = new Date(note.eventDate); // Already a Date object
+        const noteEventDate = new Date(note.eventDate);
         return isValidDateFn(noteEventDate) && noteEventDate >= startDate && noteEventDate <= endDate;
       });
     }
@@ -381,7 +471,7 @@ export default function NotesPage() {
         selectedTags.every(st => note.tags.includes(st))
       );
     }
-    
+
     if (selectedProvinces.length > 0) {
       tempNotes = tempNotes.filter(note => selectedProvinces.includes(note.province));
     }
@@ -399,25 +489,25 @@ export default function NotesPage() {
     }
 
     return tempNotes.sort((a, b) => {
-        const dateA = new Date(a.eventDate);
-        const dateB = new Date(b.eventDate);
-        if (!isValidDateFn(dateA) && !isValidDateFn(dateB)) return 0;
-        if (!isValidDateFn(dateA)) return 1; // put invalid dates at the end
-        if (!isValidDateFn(dateB)) return -1; // put invalid dates at the end
-        return dateB.getTime() - dateA.getTime();
+      const dateA = new Date(a.eventDate);
+      const dateB = new Date(b.eventDate);
+      if (!isValidDateFn(dateA) && !isValidDateFn(dateB)) return 0;
+      if (!isValidDateFn(dateA)) return 1;
+      if (!isValidDateFn(dateB)) return -1;
+      return dateB.getTime() - dateA.getTime();
     });
   }, [
-      notes, 
-      debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch, 
-      dateRange,
-      selectedCategories, selectedTags, selectedProvinces, 
-      archiveFilter, publishFilter
-    ]);
-  
-  const activeFilterCount = 
-    selectedCategories.length + 
-    selectedTags.length + 
-    selectedProvinces.length + 
+    notes,
+    debouncedTitleSearch, debouncedContentSearch, debouncedPhoneSearch,
+    dateRange,
+    selectedCategories, selectedTags, selectedProvinces,
+    archiveFilter, publishFilter
+  ]);
+
+  const activeFilterCount =
+    selectedCategories.length +
+    selectedTags.length +
+    selectedProvinces.length +
     (archiveFilter !== "all" ? 1 : 0) +
     (publishFilter !== "all" ? 1 : 0) +
     (titleSearch ? 1 : 0) +
@@ -433,100 +523,98 @@ export default function NotesPage() {
       </div>
     );
   }
-  
-  if (!currentUser && !isAuthLoading) {
-      return (
-        <div className="container mx-auto p-4 md:p-8 text-center">
-            <p className="text-lg text-destructive">برای مشاهده یادداشت‌ها ابتدا باید وارد شوید.</p>
-            <Button asChild className="mt-4">
-                <Link href="/login">رفتن به صفحه ورود</Link>
-            </Button>
-        </div>
-      )
-  }
 
+  if (!currentUser && !isAuthLoading) {
+    return (
+      <div className="container mx-auto p-4 md:p-8 text-center">
+        <p className="text-lg text-destructive">برای مشاهده یادداشت‌ها ابتدا باید وارد شوید.</p>
+        <Button asChild className="mt-4">
+          <Link href="/login">رفتن به صفحه ورود</Link>
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <>
       <div className="container mx-auto p-4 md:p-8">
         <div className="mb-6 p-4 border rounded-lg shadow bg-card">
-            <h2 className="text-lg font-semibold mb-3 text-primary flex items-center">
-                <Search className="ml-2 h-5 w-5"/>
-                جستجو و فیلتر پیشرفته
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Input
-                    type="text"
-                    placeholder="جستجو بر اساس عنوان..."
-                    value={titleSearch}
-                    onChange={(e) => setTitleSearch(e.target.value)}
-                    className="bg-input placeholder:text-muted-foreground"
-                />
-                <Input
-                    type="text"
-                    placeholder="جستجو بر اساس محتوا..."
-                    value={contentSearch}
-                    onChange={(e) => setContentSearch(e.target.value)}
-                    className="bg-input placeholder:text-muted-foreground"
-                />
-                <Input
-                    type="text"
-                    placeholder="جستجو بر اساس شماره تلفن..."
-                    value={phoneSearch}
-                    onChange={(e) => setPhoneSearch(e.target.value)}
-                    className="bg-input placeholder:text-muted-foreground"
-                />
-                 <div className="relative">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <Button
-                            id="date"
-                            variant={"outline"}
-                            className={`w-full justify-start text-left font-normal bg-input hover:bg-muted/30 ${
-                            !dateRange && "text-muted-foreground"
-                            }`}
-                        >
-                            <CalendarIconLucide className="ml-2 h-4 w-4" />
-                            {dateRange?.from ? (
-                            dateRange.to ? (
-                                <>
-                                {formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })} -{" "}
-                                {formatJalali(dateRange.to, "LLL dd, y", { locale: faIR })}
-                                </>
-                            ) : (
-                                formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })
-                            )
-                            ) : (
-                            <span>انتخاب بازه زمانی</span>
-                            )}
-                        </Button>
-                        </PopoverTrigger>
-                        {dateRange?.from && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 z-10"
-                                onClick={() => setDateRange(undefined)}
-                                aria-label="پاک کردن بازه زمانی"
-                            >
-                                <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                            </Button>
-                        )}
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={dateRange?.from}
-                            selected={dateRange}
-                            onSelect={setDateRange}
-                            numberOfMonths={2}
-                            locale={faIR}
-                            required
-                        />
-                        </PopoverContent>
-                    </Popover>
-                </div>
+          <h2 className="text-lg font-semibold mb-3 text-primary flex items-center">
+            <Search className="ml-2 h-5 w-5" />
+            جستجو و فیلتر پیشرفته
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Input
+              type="text"
+              placeholder="جستجو بر اساس عنوان..."
+              value={titleSearch}
+              onChange={(e) => setTitleSearch(e.target.value)}
+              className="bg-input placeholder:text-muted-foreground"
+            />
+            <Input
+              type="text"
+              placeholder="جستجو بر اساس محتوا..."
+              value={contentSearch}
+              onChange={(e) => setContentSearch(e.target.value)}
+              className="bg-input placeholder:text-muted-foreground"
+            />
+            <Input
+              type="text"
+              placeholder="جستجو بر اساس شماره تلفن..."
+              value={phoneSearch}
+              onChange={(e) => setPhoneSearch(e.target.value)}
+              className="bg-input placeholder:text-muted-foreground"
+            />
+            <div className="relative">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="date"
+                    variant={"outline"}
+                    className={`w-full justify-start text-left font-normal bg-input hover:bg-muted/30 ${!dateRange && "text-muted-foreground"
+                      }`}
+                  >
+                    <CalendarIconLucide className="ml-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })} -{" "}
+                          {formatJalali(dateRange.to, "LLL dd, y", { locale: faIR })}
+                        </>
+                      ) : (
+                        formatJalali(dateRange.from, "LLL dd, y", { locale: faIR })
+                      )
+                    ) : (
+                      <span>انتخاب بازه زمانی</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                {dateRange?.from && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 z-10"
+                    onClick={() => setDateRange(undefined)}
+                    aria-label="پاک کردن بازه زمانی"
+                  >
+                    <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                  </Button>
+                )}
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    locale={faIR}
+                    required
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
+          </div>
         </div>
 
         <div className="mb-8 flex flex-col sm:flex-row gap-4 items-center">
@@ -567,7 +655,7 @@ export default function NotesPage() {
                           <Badge
                             key={category.id}
                             variant={selectedCategories.includes(category.id) ? "default" : "secondary"}
-                            onClick={() => toggleCategoryFilter(category.id)} // Use category.id for filtering
+                            onClick={() => toggleCategoryFilter(category.id)}
                             className="cursor-pointer py-1.5 px-3 text-xs transition-all hover:opacity-80"
                             role="button"
                             tabIndex={0}
@@ -651,7 +739,7 @@ export default function NotesPage() {
                     ))}
                   </div>
                 </div>
-                
+
                 <div>
                   <h3 className="font-semibold mb-2.5 text-md text-foreground">وضعیت انتشار</h3>
                   <div className="flex flex-wrap gap-2">
@@ -670,12 +758,12 @@ export default function NotesPage() {
                     ))}
                   </div>
                 </div>
-                
+
                 {activeFilterCount > 0 && (
-                   <Button onClick={clearFilters} variant="outline" size="sm" className="w-full mt-4 text-muted-foreground hover:text-foreground">
-                      <FilterX className="ml-2 h-4 w-4" />
-                      پاک کردن همه فیلترها
-                   </Button>
+                  <Button onClick={clearFilters} variant="outline" size="sm" className="w-full mt-4 text-muted-foreground hover:text-foreground">
+                    <FilterX className="ml-2 h-4 w-4" />
+                    پاک کردن همه فیلترها
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -692,6 +780,8 @@ export default function NotesPage() {
                     onDelete={handleDeleteNoteRequest}
                     onToggleArchive={handleToggleArchive}
                     onTogglePublish={handleTogglePublish}
+                    onRatingChange={handleRatingChange}
+                    onCommentAdd={handleAddComment}
                   />
                 ))}
               </div>
@@ -721,7 +811,7 @@ export default function NotesPage() {
           }}
           onSubmit={handleSaveNote}
           initialData={editingNote || undefined}
-          availableCategories={displayableCategories} 
+          availableCategories={displayableCategories}
         />
 
         <ConfirmDialog

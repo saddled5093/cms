@@ -1,23 +1,22 @@
 
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  password  String // Hashed password
-  role      UserRole @default(USER)
+  id        String     @id @default(cuid())
+  username  String     @unique
+  password  String
+  role      UserRole   @default(USER)
   notes     Note[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("users")
+  comments  Comment[]  @relation("UserComments")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 enum UserRole {
@@ -25,33 +24,43 @@ enum UserRole {
   ADMIN
 }
 
-model Category {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  notes     Note[]   @relation("NoteCategories")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Note {
+  id            String     @id @default(cuid())
+  title         String
+  content       String
+  categories    Category[] @relation("NoteCategories")
+  tags          String[]
+  province      String
+  phoneNumbers  String[]
+  eventDate     DateTime
+  isArchived    Boolean    @default(false)
+  isPublished   Boolean    @default(false)
+  authorId      String
+  author        User       @relation(fields: [authorId], references: [id])
+  comments      Comment[]  @relation("NoteComments")
+  rating        Int?       @default(0) // Rating from 0 to 5, null or 0 means not rated
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  @@map("categories")
+  @@index([authorId])
 }
 
-model Note {
-  id           String     @id @default(cuid())
-  title        String
-  content      String
-  eventDate    DateTime
-  tags         String[] // Stored as JSON array in SQLite by Prisma
-  province     String
-  phoneNumbers String[] // Stored as JSON array in SQLite by Prisma
-  isArchived   Boolean    @default(false)
-  isPublished  Boolean    @default(false)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  
-  authorId     String
-  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  categories   Category[] @relation("NoteCategories")
+model Category {
+  id    String @id @default(cuid())
+  name  String @unique
+  notes Note[] @relation("NoteCategories")
+}
 
-  @@map("notes")
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  authorId  String
+  author    User     @relation("UserComments", fields: [authorId], references: [id])
+  noteId    String
+  note      Note     @relation("NoteComments", fields: [noteId], references: [id])
+
+  @@index([authorId])
+  @@index([noteId])
 }

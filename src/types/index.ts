@@ -2,10 +2,15 @@
 // Prisma now generates types, but we can define frontend-specific variations if needed.
 // For example, API response types or form data types.
 
-// This Note type should align with Prisma's Note model,
-// especially for data coming from/to the API.
-// For simplicity, we'll keep it similar for now, but in a real app,
-// you might import Prisma's generated types: import type { Note as PrismaNote } from '@prisma/client';
+export interface Comment {
+  id: string;
+  content: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  authorId: string;
+  author: { username: string };
+  noteId: string;
+}
 
 export interface Note {
   id: string;
@@ -20,6 +25,8 @@ export interface Note {
   updatedAt: Date | string;
   isArchived: boolean;
   isPublished: boolean;
+  rating?: number | null; // Rating from 0 to 5
+  comments?: Comment[]; // Array of comments
   authorId?: string; // Optional on frontend if not always needed
   author?: { username: string }; // Optional author info
 }
